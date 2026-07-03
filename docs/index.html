@@ -1,0 +1,1681 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DateTick — immutable, timezone-aware date toolkit</title>
+    <meta
+      name="description"
+      content="DateTick: an immutable, fully timezone-aware date toolkit — formatting, parsing, durations and live timeAgo, for any framework."
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+    <style>
+      :root {
+        --brand: #fb8c00;
+        --brand-dark: #e8590c;
+        --ink: #2c3e50;
+      }
+      body {
+        color: var(--ink);
+        scroll-behavior: smooth;
+      }
+      .navbar-brand {
+        font-weight: 700;
+      }
+      .text-brand {
+        color: var(--brand) !important;
+      }
+      .btn-brand {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+      }
+      .btn-brand:hover {
+        background: var(--brand-dark);
+        border-color: var(--brand-dark);
+        color: #fff;
+      }
+      .btn-outline-brand {
+        color: var(--brand-dark);
+        border-color: var(--brand);
+      }
+      .btn-outline-brand:hover {
+        background: var(--brand);
+        color: #fff;
+      }
+      .hero {
+        background:
+          radial-gradient(1200px 400px at 50% -10%, rgba(251, 140, 0, 0.12), transparent),
+          linear-gradient(180deg, #fff 0%, #fff7ef 100%);
+      }
+      .hero h1 {
+        font-size: clamp(2.4rem, 6vw, 4rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .feature-icon {
+        font-size: 1.6rem;
+        width: 3rem;
+        height: 3rem;
+        display: grid;
+        place-items: center;
+        border-radius: 0.85rem;
+        background: rgba(251, 140, 0, 0.12);
+      }
+      .result {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        word-break: break-word;
+      }
+      pre.code {
+        background: #1e1e2e;
+        color: #e6e6e6;
+        border-radius: 0.75rem;
+        padding: 1.1rem 1.25rem;
+        overflow: auto;
+        font-size: 0.86rem;
+        line-height: 1.55;
+      }
+      pre.code .tok-c {
+        color: #7f849c;
+      }
+      pre.code .tok-k {
+        color: #f38ba8;
+      }
+      pre.code .tok-s {
+        color: #a6e3a1;
+      }
+      section.anchor {
+        scroll-margin-top: 5rem;
+      }
+      .card {
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      footer a {
+        color: var(--brand-dark);
+      }
+      .doc-nav {
+        position: sticky;
+        top: 5rem;
+      }
+      .doc-nav .nav-link {
+        color: var(--ink);
+        padding: 0.2rem 0.5rem;
+        border-left: 2px solid transparent;
+        font-size: 0.92rem;
+        transition:
+          color 0.15s,
+          border-color 0.15s,
+          background-color 0.15s;
+      }
+      .doc-nav .nav-link:hover {
+        color: var(--brand-dark);
+        border-left-color: var(--brand);
+      }
+      .doc-nav .nav-link.active {
+        color: var(--brand-dark);
+        border-left-color: var(--brand);
+        background: rgba(251, 140, 0, 0.08);
+        font-weight: 600;
+      }
+      .navbar-nav .nav-link {
+        transition: color 0.15s;
+      }
+      .navbar-nav .nav-link.active {
+        color: var(--brand-dark) !important;
+        font-weight: 600;
+      }
+      .doc-block {
+        scroll-margin-top: 5rem;
+      }
+      .doc-block h3 {
+        font-weight: 700;
+        font-size: 1.3rem;
+      }
+      code.sig {
+        color: var(--brand-dark);
+        font-weight: 600;
+      }
+      table.api td code,
+      table.api th code {
+        white-space: nowrap;
+      }
+      table.api td:first-child {
+        width: 38%;
+      }
+      .datetick-picker {
+        position: absolute;
+        z-index: 1080;
+        width: 19rem;
+        max-width: calc(100vw - 2rem);
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 0.5rem;
+        box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.16);
+        padding: 0.75rem;
+      }
+      .datetick-picker[hidden] {
+        display: none;
+      }
+      .datetick-picker-head,
+      .datetick-picker-time {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .datetick-picker-title {
+        flex: 1;
+        text-align: center;
+        font-weight: 600;
+      }
+      .datetick-picker-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 0.2rem;
+        margin-top: 0.65rem;
+      }
+      .datetick-picker-weekday {
+        color: #6c757d;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-align: center;
+      }
+      .datetick-picker-day {
+        aspect-ratio: 1;
+        border: 0;
+        border-radius: 0.35rem;
+        background: transparent;
+        font-size: 0.82rem;
+      }
+      .datetick-picker-day:hover,
+      .datetick-picker-day:focus {
+        background: rgba(251, 140, 0, 0.12);
+      }
+      .datetick-picker-day.is-selected {
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+      }
+      .datetick-picker-day.is-muted {
+        color: #adb5bd;
+      }
+      .datetick-picker-time {
+        margin-top: 0.75rem;
+      }
+      .datetick-picker-time input {
+        width: 4.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top">
+      <div class="container">
+        <a class="navbar-brand" href="#top"> ⏱️ <span class="text-brand">DateTick</span> </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+            <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+            <li class="nav-item"><a class="nav-link" href="#quickstart">Quick start</a></li>
+            <li class="nav-item"><a class="nav-link" href="#docs">Docs</a></li>
+            <li class="nav-item"><a class="nav-link" href="#playground">Playground</a></li>
+            <li class="nav-item">
+              <a class="nav-link" href="https://github.com/andreasnicolaou/datetick" target="_blank" rel="noopener"
+                >GitHub</a
+              >
+            </li>
+            <li class="nav-item ms-lg-2">
+              <a
+                class="btn btn-brand btn-sm px-3"
+                href="https://www.npmjs.com/package/datetick"
+                target="_blank"
+                rel="noopener"
+                >npm</a
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <span id="top"></span>
+
+    <!-- Hero -->
+    <header class="hero text-center py-5">
+      <div class="container py-lg-4">
+        <h1 class="mb-3">DateTick — dates done right,<br /><span class="text-brand">in every timezone.</span></h1>
+        <p class="lead mx-auto mb-4" style="max-width: 720px">
+          An <strong>immutable</strong>, fully <strong>timezone-aware</strong> date toolkit —
+          <strong>formatting</strong>, <strong>parsing</strong>, <strong>durations</strong> and live “time ago”. Works
+          the same in vanilla JS, Angular, React, Vue and Node.
+        </p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap mb-4">
+          <a class="btn btn-brand btn-lg px-4" href="#playground">Try it live</a>
+          <a class="btn btn-outline-brand btn-lg px-4" href="#quickstart">Quick start</a>
+        </div>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <span class="badge text-bg-light border">Immutable</span>
+          <span class="badge text-bg-light border">DST-safe timezones</span>
+          <span class="badge text-bg-light border">~8 kB gzip</span>
+          <span class="badge text-bg-light border">TypeScript types</span>
+          <span class="badge text-bg-light border">Dependency-free live time-ago</span>
+        </div>
+        <div class="mt-4">
+          <code class="result bg-white border rounded px-3 py-2 d-inline-block">npm install datetick</code>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="load-error" class="container"><div class="alert alert-danger d-none" role="alert"></div></div>
+
+      <!-- Features -->
+      <section class="anchor py-5" id="features">
+        <div class="container">
+          <h2 class="text-center fw-bold mb-5">Everything you reach for, none of the gotchas</h2>
+          <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">🧊</div>
+                  <h5 class="fw-semibold">Immutable &amp; chainable</h5>
+                  <p class="text-muted mb-0">
+                    Every method returns a new instance, so shared dates never mutate under your components.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">🌍</div>
+                  <h5 class="fw-semibold">Truly timezone-aware</h5>
+                  <p class="text-muted mb-0">
+                    Reading, setting, <code>add</code>, <code>startOf</code> and week math all resolve through any IANA
+                    zone — DST-safe, no plugins.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">🔤</div>
+                  <h5 class="fw-semibold">Token formatting &amp; parsing</h5>
+                  <p class="text-muted mb-0">
+                    <code>formatPattern()</code> and <code>parse()</code> cover the full core, advanced and localized
+                    token tables.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">⏳</div>
+                  <h5 class="fw-semibold">Durations</h5>
+                  <p class="text-muted mb-0">
+                    <code>duration()</code> with locale-aware <code>humanize()</code>, <code>as*()</code> totals and ISO
+                    8601 parsing &amp; output.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">⚡</div>
+                  <h5 class="fw-semibold">Live time-ago</h5>
+                  <p class="text-muted mb-0">
+                    <code>timeAgoLive()</code> is a dependency-free self-rescheduling stream for any framework.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 p-3">
+                <div class="card-body">
+                  <div class="feature-icon mb-3">🪶</div>
+                  <h5 class="fw-semibold">Tiny &amp; typed</h5>
+                  <p class="text-muted mb-0">
+                    ~7 kB gzipped, zero framework deps, ships with <code>.d.ts</code> declarations.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick start -->
+      <section class="anchor py-5 bg-light" id="quickstart">
+        <div class="container">
+          <h2 class="text-center fw-bold mb-5">Quick start</h2>
+          <div class="row g-4">
+            <div class="col-lg-6">
+              <h6 class="text-uppercase text-muted small fw-bold">Format &amp; manipulate</h6>
+              <pre
+                class="code"
+              ><span class="tok-k">import</span> { DateTick } <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-k">const</span> d = <span class="tok-k">new</span> DateTick(<span class="tok-s">'en'</span>, <span class="tok-s">'UTC'</span>, <span class="tok-s">'2026-01-31T12:00:00Z'</span>);
+
+d.add(<span class="tok-s">1</span>, <span class="tok-s">'month'</span>).toISOString();   <span class="tok-c">// 2026-02-28T12:00:00.000Z</span>
+d.formatPattern(<span class="tok-s">'DD/MM/YYYY'</span>);    <span class="tok-c">// '31/01/2026'</span>
+d.startOf(<span class="tok-s">'week'</span>).formatPattern(<span class="tok-s">'ddd'</span>); <span class="tok-c">// 'Sun'</span></pre>
+            </div>
+            <div class="col-lg-6">
+              <h6 class="text-uppercase text-muted small fw-bold">Parse, diff &amp; durations</h6>
+              <pre
+                class="code"
+              ><span class="tok-k">const</span> a = DateTick.parse(<span class="tok-s">'25/06/2026'</span>, <span class="tok-s">'DD/MM/YYYY'</span>);
+<span class="tok-k">const</span> span = a.diff(<span class="tok-s">'2026-01-01'</span>);  <span class="tok-c">// ms</span>
+
+DateTick.duration(span).humanize();      <span class="tok-c">// '5 months'</span>
+DateTick.duration(<span class="tok-s">-3</span>, <span class="tok-s">'day'</span>).humanize(<span class="tok-k">true</span>); <span class="tok-c">// '3 days ago'</span>
+
+<span class="tok-c">// Live updates (Angular/React/Vue):</span>
+<span class="tok-k">const</span> stop = d.timeAgoSubscribe(console.log);
+stop();</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Documentation -->
+      <section class="anchor py-5" id="docs">
+        <div class="container">
+          <h2 class="text-center fw-bold mb-5">Documentation</h2>
+          <div class="row g-5">
+            <!-- Sidebar -->
+            <aside class="col-lg-3 d-none d-lg-block">
+              <nav class="doc-nav nav flex-column">
+                <a class="nav-link" href="#doc-install">Installation</a>
+                <a class="nav-link" href="#doc-create">Creating a DateTick</a>
+                <a class="nav-link" href="#doc-getset">Getters &amp; setters</a>
+                <a class="nav-link" href="#doc-manip">Manipulation</a>
+                <a class="nav-link" href="#doc-compare">Comparison</a>
+                <a class="nav-link" href="#doc-relative">Relative time</a>
+                <a class="nav-link" href="#doc-calendar">Calendar info</a>
+                <a class="nav-link" href="#doc-format">Formatting</a>
+                <a class="nav-link" href="#doc-tokens">Format tokens</a>
+                <a class="nav-link" href="#doc-parse">Parsing</a>
+                <a class="nav-link" href="#doc-duration">Durations</a>
+                <a class="nav-link" href="#doc-convert">Conversion</a>
+                <a class="nav-link" href="#doc-locale">Locale data</a>
+                <a class="nav-link" href="#doc-static">Static helpers</a>
+                <a class="nav-link" href="#doc-defaults">App-wide defaults</a>
+                <a class="nav-link" href="#doc-vanilla">Vanilla JS</a>
+                <a class="nav-link" href="#doc-angular">Angular</a>
+                <a class="nav-link" href="#doc-react">React</a>
+                <a class="nav-link" href="#doc-vue">Vue 3</a>
+              </nav>
+            </aside>
+
+            <!-- Content -->
+            <div class="col-lg-9">
+              <div class="doc-block mb-5" id="doc-install">
+                <h3 class="mb-3">Installation</h3>
+                <pre class="code">npm install datetick</pre>
+                <p class="text-muted mb-2">
+                  Both ESM and a UMD build (browser global <code>datetick</code>) are shipped, with bundled TypeScript
+                  types and no runtime dependencies.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-create">
+                <h3 class="mb-3">Creating a DateTick</h3>
+                <p class="text-muted">
+                  Use the lowercase <code>datetick()</code> factory, or the <code>DateTick</code> class directly —
+                  they’re interchangeable and both immutable.
+                </p>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> datetick, { DateTick } <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-c">// factory(date?, { locale?, timezone?, weekStartsOn? })</span>
+datetick(<span class="tok-s">'2026-06-25T19:23Z'</span>, { timezone: <span class="tok-s">'Asia/Tokyo'</span> });
+datetick();                          <span class="tok-c">// now</span>
+datetick.utc(<span class="tok-s">'2026-06-25'</span>);            <span class="tok-c">// timezone fixed to UTC</span>
+datetick.unix(<span class="tok-s">1782760980</span>);            <span class="tok-c">// from Unix seconds</span>
+datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezone</span>
+
+<span class="tok-c">// new DateTick(locale?, timezone?, date?, weekStartsOn?)</span>
+<span class="tok-k">new</span> DateTick(<span class="tok-s">'en'</span>, <span class="tok-s">'UTC'</span>, <span class="tok-s">'2026-06-25T19:23Z'</span>, <span class="tok-s">1</span>);</pre>
+                <p class="text-muted mb-0">
+                  Inputs may be a <code>Date</code>, an ISO/parsable <code>string</code>, another <code>DateTick</code>,
+                  a parts object, or a parts array. Every calendar operation reflects the wall clock in the configured
+                  timezone, while the underlying instant stays absolute and DST-safe.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-getset">
+                <h3 class="mb-3">Getters &amp; setters</h3>
+                <p class="text-muted">
+                  Call with no argument to <strong>get</strong> a number; pass a value to <strong>set</strong>,
+                  returning a new instance.
+                </p>
+                <table class="table table-sm api">
+                  <tbody>
+                    <tr>
+                      <td><code>year(value?)</code></td>
+                      <td>Full year</td>
+                    </tr>
+                    <tr>
+                      <td><code>month(value?)</code></td>
+                      <td>Month, <code>0</code>–<code>11</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>date(value?)</code></td>
+                      <td>Day of the month, <code>1</code>–<code>31</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>day(value?)</code></td>
+                      <td>Day of week, <code>0</code> (Sun) – <code>6</code> (Sat)</td>
+                    </tr>
+                    <tr>
+                      <td><code>hour(value?)</code> · <code>minute(value?)</code></td>
+                      <td>Hours / minutes</td>
+                    </tr>
+                    <tr>
+                      <td><code>second(value?)</code> · <code>millisecond(value?)</code></td>
+                      <td>Seconds / milliseconds</td>
+                    </tr>
+                    <tr>
+                      <td><code>get(unit)</code></td>
+                      <td>
+                        Read any unit, incl. <code>dayOfYear</code>, <code>week</code>, <code>isoWeek</code>,
+                        <code>quarter</code>, <code>daysInMonth</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><code>set(unit, value)</code></td>
+                      <td>Set any settable unit</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="text-muted mb-0">
+                  Day.js-style <strong>plural aliases</strong> are also available: <code>years</code>,
+                  <code>months</code>, <code>dates</code>, <code>days</code>, <code>hours</code>, <code>minutes</code>,
+                  <code>seconds</code>, <code>milliseconds</code> (get/set) and <code>weeks()</code> (get). Each simply
+                  forwards to its singular counterpart.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-manip">
+                <h3 class="mb-3">Manipulation</h3>
+                <table class="table table-sm api">
+                  <tbody>
+                    <tr>
+                      <td><code>add(amount, unit)</code></td>
+                      <td>
+                        Add time (<code>millisecond</code>→<code>year</code>, incl. <code>week</code>,
+                        <code>quarter</code>). Negative subtracts; month/year additions clamp the day.
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><code>subtract(amount, unit)</code></td>
+                      <td>Inverse of <code>add</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>startOf(unit)</code> · <code>endOf(unit)</code></td>
+                      <td>
+                        Snap to the start/end of
+                        <code>year</code
+                        >/<code>quarter</code>/<code>month</code>/<code>week</code>/<code>day</code>/<code>hour</code>/<code>minute</code>/<code
+                          >second</code
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><code>clone()</code></td>
+                      <td>Copy the instance</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>withDate</code> · <code>withLocale</code> · <code>withTimezone</code> ·
+                        <code>withWeekStart</code>
+                      </td>
+                      <td>Derive a new instance changing one aspect</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-compare">
+                <h3 class="mb-3">Comparison</h3>
+                <table class="table table-sm api">
+                  <tbody>
+                    <tr>
+                      <td><code>diff(date, unit?)</code></td>
+                      <td>Difference (default <code>millisecond</code>), truncated toward zero</td>
+                    </tr>
+                    <tr>
+                      <td><code>diffCalendar(date, unit?)</code></td>
+                      <td>Calendar-boundary difference for <code>day</code>/<code>week</code>/<code>month</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>isBefore(date)</code> · <code>isAfter(date)</code></td>
+                      <td>Strict ordering</td>
+                    </tr>
+                    <tr>
+                      <td><code>isSame(date, unit?)</code></td>
+                      <td>Equality, optionally truncated to a unit</td>
+                    </tr>
+                    <tr>
+                      <td><code>isSameOrBefore</code> · <code>isSameOrAfter</code></td>
+                      <td>Inclusive ordering</td>
+                    </tr>
+                    <tr>
+                      <td><code>isBetween(start, end, inclusive?)</code></td>
+                      <td>Range check</td>
+                    </tr>
+                    <tr>
+                      <td><code>isToday()</code> / <code>isTomorrow()</code> / <code>isYesterday()</code></td>
+                      <td>Relative calendar-day checks</td>
+                    </tr>
+                    <tr>
+                      <td><code>isValid()</code></td>
+                      <td>Whether the wrapped date is valid</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="text-muted mb-0">
+                  All date inputs accept a <code>Date</code>, a <code>string</code>, another <code>DateTick</code>, a
+                  parts object, or a parts array.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-relative">
+                <h3 class="mb-3">Relative time</h3>
+                <p class="text-muted">
+                  Locale-aware “time ago” strings via <code>Intl.RelativeTimeFormat</code>, plus a dependency-free live
+                  stream.
+                </p>
+                <pre class="code">d.timeAgo();                       <span class="tok-c">// '3 minutes ago'</span>
+d.fromNow();                       <span class="tok-c">// same, Day.js-style</span>
+d.from(other); d.to(other); d.toNow();
+d.calendar();                      <span class="tok-c">// 'Today at 7:23 PM'</span>
+
+<span class="tok-c">// Live, self-rescheduling stream — works in any framework</span>
+<span class="tok-k">const</span> stop = d.timeAgoSubscribe((label) =&gt; render(label));
+
+<span class="tok-c">// Tune when it steps up from one unit to the next</span>
+d.timeAgo(<span class="tok-k">undefined</span>, { second: <span class="tok-s">120</span> }); <span class="tok-c">// keep seconds up to 119</span></pre>
+                <p class="text-muted mb-0">
+                  <code>timeAgo(options?, thresholds?)</code> accepts an optional
+                  <code>{ second, minute, hour, day, month }</code> threshold override (defaults reproduce
+                  <code>60 / 60 / 24 / 30 / 12</code>); the same <code>thresholds</code> flow through
+                  <code>timeAgoLive()</code> and <code>timeAgoSubscribe()</code>.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-calendar">
+                <h3 class="mb-3">Calendar info</h3>
+                <p class="text-muted mb-0">
+                  <code>dayOfYear()</code>, <code>week()</code>, <code>weekYear()</code>, <code>weeksInYear()</code>,
+                  <code>isoDay()</code>, <code>isoWeek()</code>, <code>isoWeekYear()</code>,
+                  <code>isoWeeksInYear()</code>, <code>quarter()</code>, <code>daysInMonth()</code>,
+                  <code>isLeapYear()</code>, <code>isToday()</code>, <code>isTomorrow()</code>,
+                  <code>isYesterday()</code>, <code>ordinal()</code>, <code>calendarMonth()</code>. Week numbering and
+                  <code>startOf('week')</code> honour the configured <code>weekStartsOn</code>.
+                  <code>calendarMonth({ selected, dateFormat })</code> returns localized weekday labels plus padded date
+                  cells for building date pickers and month views. Each cell keeps a stable <code>isoDate</code> plus a
+                  locale-aware display <code>formatted</code> value.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-format">
+                <h3 class="mb-3">Formatting</h3>
+                <p class="text-muted">Two complementary ways to format, both resolved in the configured timezone:</p>
+                <pre class="code"><span class="tok-c">// 1) Intl-powered presets / options (locale-aware)</span>
+d.format(<span class="tok-s">'short'</span>);
+d.format({ dateStyle: <span class="tok-s">'long'</span> });
+
+<span class="tok-c">// 2) Token patterns</span>
+d.formatPattern(<span class="tok-s">'dddd, MMMM D, YYYY h:mm A'</span>);
+d.formatPattern(<span class="tok-s">'YYYY-MM-DD[T]HH:mm:ssZ'</span>);</pre>
+                <p class="text-muted mb-0">
+                  Presets: <code>short</code>, <code>medium</code>, <code>long</code>, <code>full</code>,
+                  <code>dateOnly</code>, <code>timeOnly</code>, <code>weekdayTime</code>, <code>isoStyle12h</code>,
+                  <code>isoStyle24h</code>.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-tokens">
+                <h3 class="mb-3">Format tokens</h3>
+                <p class="text-muted">
+                  Wrap literal text in <code>[brackets]</code>. Names, meridiem and the localized <code>L</code>-family
+                  all honour the instance locale — including its field order and separators.
+                </p>
+                <table class="table table-sm table-striped api">
+                  <thead>
+                    <tr>
+                      <th>Token</th>
+                      <th>Output</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>YYYY</code> · <code>YY</code></td>
+                      <td>Year (4-digit / 2-digit)</td>
+                    </tr>
+                    <tr>
+                      <td><code>MMMM</code> · <code>MMM</code> · <code>MM</code> · <code>M</code></td>
+                      <td>Month name (full/short) / number (padded/plain)</td>
+                    </tr>
+                    <tr>
+                      <td><code>DD</code> · <code>D</code> · <code>Do</code></td>
+                      <td>
+                        Day of month (padded / plain / ordinal — English by default, see <code>ordinal</code> below)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><code>dddd</code> · <code>ddd</code> · <code>dd</code> · <code>d</code></td>
+                      <td>Weekday name (full/short/narrow) / number</td>
+                    </tr>
+                    <tr>
+                      <td><code>HH</code> · <code>H</code> · <code>hh</code> · <code>h</code></td>
+                      <td>Hour, 24h / 12h (padded / plain)</td>
+                    </tr>
+                    <tr>
+                      <td><code>kk</code> · <code>k</code></td>
+                      <td>Hour 1–24 (padded / plain)</td>
+                    </tr>
+                    <tr>
+                      <td><code>mm</code> · <code>m</code> · <code>ss</code> · <code>s</code> · <code>SSS</code></td>
+                      <td>Minutes / seconds / milliseconds</td>
+                    </tr>
+                    <tr>
+                      <td><code>A</code> · <code>a</code></td>
+                      <td>
+                        Meridiem, locale-aware (<code>AM/PM</code>, <code>π.μ./μ.μ.</code>, <code>上午/下午</code>)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td><code>Z</code> · <code>ZZ</code></td>
+                      <td>UTC offset <code>+HH:mm</code> / <code>+HHmm</code></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <code>Q</code> · <code>w</code>/<code>ww</code>/<code>wo</code> ·
+                        <code>W</code>/<code>WW</code>/<code>Wo</code>
+                      </td>
+                      <td>Quarter · week of year (+ ordinal) · ISO week (+ ordinal)</td>
+                    </tr>
+                    <tr>
+                      <td><code>X</code> · <code>x</code></td>
+                      <td>Unix seconds · Unix milliseconds</td>
+                    </tr>
+                    <tr>
+                      <td><code>L LL LLL LLLL</code> · <code>l ll lll llll</code> · <code>LT LTS</code></td>
+                      <td>Localized date/time — field order &amp; separators follow the locale</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <pre
+                  class="code"
+                >datetick(<span class="tok-s">'2026-06-25'</span>).formatPattern(<span class="tok-s">'L'</span>);                <span class="tok-c">// '06/25/2026'  (en)</span>
+datetick(<span class="tok-s">'2026-06-25'</span>, { locale: <span class="tok-s">'en-GB'</span> }).formatPattern(<span class="tok-s">'L'</span>);  <span class="tok-c">// '25/06/2026'</span>
+datetick(<span class="tok-s">'2026-06-25'</span>, { locale: <span class="tok-s">'de'</span> }).formatPattern(<span class="tok-s">'LL'</span>);    <span class="tok-c">// '25. Juni 2026'</span></pre>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-parse">
+                <h3 class="mb-3">Parsing</h3>
+                <p class="text-muted">
+                  <code class="sig">DateTick.parse(input, pattern, locale?, timezone?)</code> (also
+                  <code>datetick.parse</code>) reads the wall-clock values in the given timezone and returns a
+                  <code>DateTick</code>. Throws if the input doesn’t match.
+                </p>
+                <pre
+                  class="code"
+                >datetick.parse(<span class="tok-s">'25/06/2026 22:23'</span>, <span class="tok-s">'DD/MM/YYYY HH:mm'</span>, <span class="tok-s">'en'</span>, <span class="tok-s">'UTC'</span>);
+datetick.parse(<span class="tok-s">'Jun 25, 2026 10:23 PM'</span>, <span class="tok-s">'MMM D, YYYY h:mm A'</span>);
+
+<span class="tok-c">// Localized month names, meridiem and L-family layouts round-trip</span>
+datetick.parse(<span class="tok-s">'25/06/2026'</span>, <span class="tok-s">'L'</span>, <span class="tok-s">'fr'</span>, <span class="tok-s">'UTC'</span>);
+datetick.parse(<span class="tok-s">'2026-06-25 下午 07:23'</span>, <span class="tok-s">'YYYY-MM-DD A hh:mm'</span>, <span class="tok-s">'zh'</span>, <span class="tok-s">'UTC'</span>);</pre>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-duration">
+                <h3 class="mb-3">Durations</h3>
+                <pre
+                  class="code"
+                >datetick.duration(<span class="tok-s">2</span>, <span class="tok-s">'hour'</span>).humanize();        <span class="tok-c">// '2 hours'</span>
+datetick.duration(<span class="tok-s">-3</span>, <span class="tok-s">'day'</span>).humanize(<span class="tok-k">true</span>);    <span class="tok-c">// '3 days ago'</span>
+datetick.duration({ days: <span class="tok-s">1</span>, hours: <span class="tok-s">2</span> }).asMinutes(); <span class="tok-c">// 1560</span>
+datetick.duration(<span class="tok-s">'P1Y2M10DT2H30M'</span>).asDays();     <span class="tok-c">// parse an ISO-8601 duration</span>
+datetick.duration(span).toISOString();          <span class="tok-c">// 'P1Y2M3DT4H5M6S'</span></pre>
+                <p class="text-muted mb-0">
+                  Create a <code>Duration</code> from a number + unit, a components object, or an
+                  <strong>ISO-8601 string</strong> (e.g. <code>'PT1H30M'</code>, fractional and signed accepted). It’s
+                  immutable: <code>as{Milliseconds…Years}()</code> totals, component getters
+                  <code>years()…milliseconds()</code>, <code>add</code>/<code>subtract</code>,
+                  <code>humanize(withSuffix?)</code>, <code>format(pattern?)</code>,
+                  <code>toISOString()</code>/<code>toJSON()</code>, <code>valueOf()</code>. Fixed ratios: 1 month = 30
+                  days, 1 year = 365 days.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-convert">
+                <h3 class="mb-3">Conversion</h3>
+                <p class="text-muted mb-0">
+                  <code>toDate()</code>, <code>toArray()</code>, <code>toObject()</code>, <code>toISOString()</code>,
+                  <code>toJSON()</code> (so <code>JSON.stringify</code> works), <code>toString()</code>,
+                  <code>unix()</code> (seconds), <code>valueOf()</code> (ms — enables <code>+instance</code> and
+                  <code>&lt;</code>/<code>&gt;</code>).
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-locale">
+                <h3 class="mb-3">Locale data</h3>
+                <p class="text-muted">
+                  <code class="sig">localeData()</code> exposes locale metadata resolved through <code>Intl</code> — the
+                  Day.js <code>localeData()</code> equivalent, with no locale files to import.
+                </p>
+                <pre
+                  class="code"
+                ><span class="tok-k">const</span> ld = datetick(<span class="tok-s">'2026-06-25'</span>, { locale: <span class="tok-s">'fr'</span> }).localeData();
+ld.months();          <span class="tok-c">// ['janvier', 'février', …]</span>
+ld.weekdays();        <span class="tok-c">// Sunday-based: ['dimanche', 'lundi', …]</span>
+ld.weekdaysShort();   ld.weekdaysMin();
+ld.firstDayOfWeek();  <span class="tok-c">// configured weekStartsOn</span>
+ld.meridiems();       <span class="tok-c">// { am, pm }</span>
+ld.meridiem(<span class="tok-s">15</span>);      <span class="tok-c">// 'PM'  (locale-aware)</span>
+ld.ordinal(<span class="tok-s">1</span>);        <span class="tok-c">// '1st'  (or your ordinal override)</span></pre>
+                <p class="text-muted mb-0">
+                  Also: <code>months()</code>/<code>monthsShort()</code>. Because everything derives from
+                  <code>Intl</code>, coverage matches the runtime’s CLDR data — hundreds of locales, no bundles.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-static">
+                <h3 class="mb-3">Static helpers</h3>
+                <p class="text-muted mb-0">
+                  <code>DateTick.guessTimezone()</code>, <code>DateTick.isValid(date)</code>,
+                  <code>DateTick.min(...dates)</code>, <code>DateTick.max(...dates)</code>,
+                  <code>DateTick.parse(...)</code>, <code>DateTick.duration(...)</code> — all also available on the
+                  <code>datetick</code> factory (plus <code>datetick.utc</code> and <code>datetick.unix</code>).
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-defaults">
+                <h3 class="mb-3">App-wide defaults</h3>
+                <p class="text-muted">
+                  <code class="sig">datetick.withDefaults(options)</code> returns a new, independent factory pre-bound
+                  to the given <code>{ locale, timezone, weekStartsOn, ordinal }</code>. It mutates nothing global —
+                  `datetick` itself is unaffected, so it's safe under SSR and concurrent requests.
+                </p>
+                <pre
+                  class="code"
+                >const frDateTick = datetick.withDefaults({ locale: <span class="tok-s">'fr'</span>, timezone: <span class="tok-s">'Europe/Paris'</span> });
+
+frDateTick(<span class="tok-s">'2026-06-25'</span>).format(<span class="tok-s">'long'</span>);   <span class="tok-c">// French, Paris</span>
+frDateTick.duration(<span class="tok-s">2</span>, <span class="tok-s">'day'</span>).humanize(); <span class="tok-c">// '2 jours'</span>
+datetick(<span class="tok-s">'2026-06-25'</span>).format(<span class="tok-s">'long'</span>);    <span class="tok-c">// unaffected, still 'en'</span></pre>
+                <p class="text-muted">
+                  Month/weekday names, the <code>L</code>-family layout and meridiem are already localized through
+                  <code>Intl</code>. The one thing <code>Intl</code> can’t supply is <strong>ordinals</strong>, so pass
+                  an <code>ordinal</code> function to localize <code>ordinal()</code> and the
+                  <code>Do</code>/<code>wo</code>/<code>Wo</code> tokens (no global <code>updateLocale</code> needed):
+                </p>
+                <pre
+                  class="code"
+                >const el = datetick.withDefaults({ locale: <span class="tok-s">'el'</span>, ordinal: (n) =&gt; <span class="tok-s">`${n}η`</span> });
+el(<span class="tok-s">'2026-06-01'</span>).formatPattern(<span class="tok-s">'Do'</span>);   <span class="tok-c">// '1η'  (meridiem already localized by Intl)</span></pre>
+                <p class="text-muted">
+                  Defaults merge progressively when chained, and a per-call option still wins over the factory's
+                  defaults:
+                </p>
+                <pre
+                  class="code"
+                >const frParisMonday = frDateTick.withDefaults({ weekStartsOn: <span class="tok-s">1</span> });
+frParisMonday(<span class="tok-s">'2026-06-25'</span>, { locale: <span class="tok-s">'de'</span> }).locale(); <span class="tok-c">// 'de' — explicit override wins</span></pre>
+                <p class="text-muted">
+                  "App-wide" just means creating the scoped factory <strong>once</strong> and importing that instance
+                  everywhere instead of the base <code>datetick</code> — nothing global to coordinate:
+                </p>
+                <pre
+                  class="code"
+                ><span class="tok-c">// src/app-datetick.ts — one shared module, identical in any framework</span>
+<span class="tok-k">import</span> datetick <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+<span class="tok-k">export const</span> appDateTick = datetick.withDefaults({ locale: <span class="tok-s">'fr'</span>, timezone: <span class="tok-s">'Europe/Paris'</span> });
+
+<span class="tok-c">// anywhere else</span>
+<span class="tok-k">import</span> { appDateTick } <span class="tok-k">from</span> <span class="tok-s">'./app-datetick'</span>;
+appDateTick(<span class="tok-s">'2026-06-25'</span>).format(<span class="tok-s">'long'</span>);</pre>
+                <p class="text-muted mb-0">
+                  If the locale can change at <em>runtime</em> (a language switcher) and components need to react to it,
+                  hold the current factory in your framework's own reactivity primitive instead — see the
+                  <a href="#doc-angular">Angular</a>, <a href="#doc-react">React</a> and <a href="#doc-vue">Vue</a>
+                  sections below.
+                </p>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-vanilla">
+                <h3 class="mb-3">Vanilla JS / TypeScript</h3>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> datetick <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+document.querySelector(<span class="tok-s">'#published'</span>).textContent = datetick(<span class="tok-s">'2024-01-01'</span>).format(<span class="tok-s">'long'</span>);</pre>
+                <p class="text-muted">Via CDN (UMD global <code>datetick</code>):</p>
+                <pre
+                  class="code"
+                >&lt;script src=<span class="tok-s">"https://unpkg.com/datetick/dist/index.umd.min.js"</span>&gt;&lt;/script&gt;
+&lt;script&gt;
+  <span class="tok-c">// The UMD global exposes the namespace: datetick.datetick(), datetick.DateTick, datetick.Duration</span>
+  console.log(datetick.datetick(<span class="tok-s">'2024-01-01'</span>).format(<span class="tok-s">'medium'</span>));
+&lt;/script&gt;</pre>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-angular">
+                <h3 class="mb-3">Angular</h3>
+                <p class="text-muted">
+                  An impure pipe that subscribes to <code>timeAgoLive()</code> and updates itself:
+                </p>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> { ChangeDetectorRef, OnDestroy, Pipe, PipeTransform } <span class="tok-k">from</span> <span class="tok-s">'@angular/core'</span>;
+<span class="tok-k">import</span> datetick <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+@Pipe({ name: <span class="tok-s">'timeAgo'</span>, standalone: <span class="tok-k">true</span>, pure: <span class="tok-k">false</span> })
+<span class="tok-k">export class</span> TimeAgoPipe <span class="tok-k">implements</span> PipeTransform, OnDestroy {
+  <span class="tok-k">private</span> label = <span class="tok-s">''</span>;
+  <span class="tok-k">private</span> lastValue?: Date | string;
+  <span class="tok-k">private</span> stop?: () =&gt; void;
+
+  constructor(<span class="tok-k">private</span> cdr: ChangeDetectorRef) {}
+
+  transform(value: Date | string): string {
+    <span class="tok-k">if</span> (value !== <span class="tok-k">this</span>.lastValue) {
+      <span class="tok-k">this</span>.stop?.();
+      <span class="tok-k">this</span>.lastValue = value;
+      <span class="tok-k">this</span>.stop = datetick(value).timeAgoSubscribe((label) =&gt; {
+        <span class="tok-k">this</span>.label = label;
+        <span class="tok-k">this</span>.cdr.markForCheck();
+      });
+    }
+    <span class="tok-k">return</span> <span class="tok-k">this</span>.label;
+  }
+
+  ngOnDestroy(): void {
+    <span class="tok-k">this</span>.stop?.();
+  }
+}</pre>
+                <pre class="code">&lt;span&gt;{{ post.createdAt | timeAgo }}&lt;/span&gt;</pre>
+                <p class="text-muted">
+                  App-wide, switchable locale — a service exposing a <code>signal&lt;DateTickFactory&gt;</code>:
+                </p>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> { Injectable, Signal, signal } <span class="tok-k">from</span> <span class="tok-s">'@angular/core'</span>;
+<span class="tok-k">import</span> datetick, { DateTickFactory } <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+@Injectable({ providedIn: <span class="tok-s">'root'</span> })
+<span class="tok-k">export class</span> AppDateTickService {
+  <span class="tok-k">private readonly</span> _datetick = signal&lt;DateTickFactory&gt;(datetick.withDefaults({ locale: <span class="tok-s">'en'</span> }));
+  <span class="tok-k">readonly</span> datetick: Signal&lt;DateTickFactory&gt; = <span class="tok-k">this</span>._datetick.asReadonly();
+
+  setLocale(locale: string): void {
+    <span class="tok-k">this</span>._datetick.set(datetick.withDefaults({ locale }));
+  }
+}</pre>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> { Component, Input } <span class="tok-k">from</span> <span class="tok-s">'@angular/core'</span>;
+
+@Component({ selector: <span class="tok-s">'app-post'</span>, template: `&lt;time&gt;{{ appDateTick.datetick()(createdAt).format('long') }}&lt;/time&gt;` })
+<span class="tok-k">export class</span> PostComponent {
+  @Input({ required: <span class="tok-k">true</span> }) createdAt!: string;
+
+  constructor(<span class="tok-k">readonly</span> appDateTick: AppDateTickService) {}
+}</pre>
+              </div>
+
+              <div class="doc-block mb-5" id="doc-react">
+                <h3 class="mb-3">React</h3>
+                <p class="text-muted">A hook that subscribes to <code>timeAgoLive()</code>:</p>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> { useEffect, useState } <span class="tok-k">from</span> <span class="tok-s">'react'</span>;
+<span class="tok-k">import</span> datetick <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-k">export const</span> TimeAgo = ({ date }: { date: string | Date }) =&gt; {
+  <span class="tok-k">const</span> [label, setLabel] = useState(<span class="tok-s">''</span>);
+  useEffect(() =&gt; {
+    <span class="tok-k">return</span> datetick(date).timeAgoSubscribe(setLabel);
+  }, [date]);
+  <span class="tok-k">return</span> &lt;time&gt;{label}&lt;/time&gt;;
+};</pre>
+                <p class="text-muted">App-wide, switchable locale — a Context provider + hook:</p>
+                <pre
+                  class="code"
+                ><span class="tok-k">import</span> { createContext, useContext, useMemo, type ReactNode } <span class="tok-k">from</span> <span class="tok-s">'react'</span>;
+<span class="tok-k">import</span> datetick, { DateTickFactory } <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-k">const</span> DateTickContext = createContext&lt;DateTickFactory&gt;(datetick);
+
+<span class="tok-k">export const</span> DateTickProvider = ({ locale, children }: { locale: string; children: ReactNode }) =&gt; {
+  <span class="tok-k">const</span> value = useMemo(() =&gt; datetick.withDefaults({ locale }), [locale]);
+  <span class="tok-k">return</span> &lt;DateTickContext.Provider value={value}&gt;{children}&lt;/DateTickContext.Provider&gt;;
+};
+
+<span class="tok-k">export const</span> useAppDateTick = (): DateTickFactory =&gt; useContext(DateTickContext);
+<span class="tok-c">// Switching language: render &lt;DateTickProvider locale={locale}&gt; with new state from useState/useReducer</span></pre>
+                <pre class="code"><span class="tok-k">const</span> PublishedDate = ({ date }: { date: string }) =&gt; {
+  <span class="tok-k">const</span> appDateTick = useAppDateTick();
+  <span class="tok-k">return</span> &lt;time&gt;{appDateTick(date).format(<span class="tok-s">'long'</span>)}&lt;/time&gt;;
+};</pre>
+              </div>
+
+              <div class="doc-block" id="doc-vue">
+                <h3 class="mb-3">Vue 3</h3>
+                <p class="text-muted">A composable that subscribes to <code>timeAgoLive()</code>:</p>
+                <pre class="code">&lt;script setup lang=<span class="tok-s">"ts"</span>&gt;
+<span class="tok-k">import</span> { ref, onMounted, onUnmounted } <span class="tok-k">from</span> <span class="tok-s">'vue'</span>;
+<span class="tok-k">import</span> datetick <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-k">const</span> props = defineProps&lt;{ date: string | Date }&gt;();
+<span class="tok-k">const</span> label = ref(<span class="tok-s">''</span>);
+<span class="tok-k">let</span> stop: (() =&gt; void) | undefined;
+
+onMounted(() =&gt; {
+  stop = datetick(props.date).timeAgoSubscribe((v) =&gt; (label.value = v));
+});
+onUnmounted(() =&gt; stop?.());
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;time&gt;{{ label }}&lt;/time&gt;
+&lt;/template&gt;</pre>
+                <p class="text-muted">
+                  App-wide, switchable locale — <code>provide</code>/<code>inject</code> + a composable:
+                </p>
+                <pre class="code"><span class="tok-c">// app-datetick.ts</span>
+<span class="tok-k">import</span> { inject, ref, type App, type Ref } <span class="tok-k">from</span> <span class="tok-s">'vue'</span>;
+<span class="tok-k">import</span> datetick, { DateTickFactory } <span class="tok-k">from</span> <span class="tok-s">'datetick'</span>;
+
+<span class="tok-k">const</span> DATETICK_KEY = Symbol(<span class="tok-s">'appDateTick'</span>);
+
+<span class="tok-k">export const</span> provideAppDateTick = (app: App, initialLocale: string): Ref&lt;DateTickFactory&gt; =&gt; {
+  <span class="tok-k">const</span> current = ref(datetick.withDefaults({ locale: initialLocale })) <span class="tok-k">as</span> Ref&lt;DateTickFactory&gt;;
+  app.provide(DATETICK_KEY, current);
+  <span class="tok-k">return</span> current; <span class="tok-c">// current.value = datetick.withDefaults({ locale: next }) to switch language</span>
+};
+
+<span class="tok-k">export const</span> useAppDateTick = (): Ref&lt;DateTickFactory&gt; =&gt; inject(DATETICK_KEY) <span class="tok-k">as</span> Ref&lt;DateTickFactory&gt;;</pre>
+                <pre class="code">&lt;script setup lang=<span class="tok-s">"ts"</span>&gt;
+<span class="tok-k">import</span> { useAppDateTick } <span class="tok-k">from</span> <span class="tok-s">'./app-datetick'</span>;
+<span class="tok-k">const</span> { date } = defineProps&lt;{ date: string }&gt;();
+<span class="tok-k">const</span> appDateTick = useAppDateTick();
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;time&gt;{{ appDateTick(date).format('long') }}&lt;/time&gt;
+&lt;/template&gt;</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Playground -->
+      <section class="anchor py-5 bg-light" id="playground">
+        <div class="container">
+          <h2 class="text-center fw-bold mb-2">Live playground</h2>
+          <p class="text-center text-muted mb-5">
+            Everything below runs the real library in your browser. Pick a date, locale, timezone and week start.
+          </p>
+
+          <!-- Controls -->
+          <div class="card mb-4">
+            <div class="card-header fw-semibold bg-white">Inputs</div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label" for="dateInput">Date &amp; time</label>
+                  <input
+                    type="text"
+                    id="dateInput"
+                    class="form-control"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="YYYY-MM-DD HH:mm"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="localeInput">Locale</label>
+                  <select id="localeInput" class="form-select">
+                    <option value="en">en</option>
+                    <option value="en-GB">en-GB</option>
+                    <option value="fr">fr</option>
+                    <option value="de">de</option>
+                    <option value="es">es</option>
+                    <option value="ja">ja</option>
+                    <option value="el">el</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="tzInput">Timezone</label>
+                  <select id="tzInput" class="form-select">
+                    <option value="UTC">UTC</option>
+                    <option value="Europe/London">Europe/London</option>
+                    <option value="Europe/Paris">Europe/Paris</option>
+                    <option value="America/New_York">America/New_York</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                    <option value="Asia/Nicosia">Asia/Nicosia</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="weekStartInput">Week starts on</label>
+                  <select id="weekStartInput" class="form-select">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mt-3">
+                <button class="btn btn-outline-brand btn-sm" id="nowBtn" type="button">Set to now</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <!-- Formatting -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">Formatting</div>
+                <div class="card-body">
+                  <label class="form-label" for="patternInput">Token pattern</label>
+                  <div class="input-group mb-2">
+                    <span class="input-group-text">formatPattern</span>
+                    <input type="text" id="patternInput" class="form-control" value="dddd, MMMM D, YYYY h:mm:ss A" />
+                  </div>
+                  <div class="alert alert-secondary result mb-3" id="patternOut">—</div>
+                  <table class="table table-sm align-middle mb-0">
+                    <tbody id="formatTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- Components / getters -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">Components &amp; calendar info</div>
+                <div class="card-body">
+                  <table class="table table-sm align-middle mb-0">
+                    <tbody id="partsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- Manipulation -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">Manipulation (immutable)</div>
+                <div class="card-body">
+                  <div class="input-group mb-3">
+                    <input type="number" id="amountInput" class="form-control" value="1" style="max-width: 6rem" />
+                    <select id="unitInput" class="form-select">
+                      <option>millisecond</option>
+                      <option>second</option>
+                      <option>minute</option>
+                      <option>hour</option>
+                      <option selected>day</option>
+                      <option>week</option>
+                      <option>month</option>
+                      <option>quarter</option>
+                      <option>year</option>
+                    </select>
+                    <button class="btn btn-brand" id="addBtn" type="button">add</button>
+                    <button class="btn btn-outline-brand" id="subBtn" type="button">subtract</button>
+                  </div>
+                  <table class="table table-sm align-middle mb-0">
+                    <tbody id="manipTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- Comparison + live time ago -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">Comparison &amp; live relative time</div>
+                <div class="card-body">
+                  <label class="form-label" for="compareInput">Compare against</label>
+                  <input
+                    type="text"
+                    id="compareInput"
+                    class="form-control mb-3"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="YYYY-MM-DD HH:mm"
+                  />
+                  <table class="table table-sm align-middle">
+                    <tbody id="compareTable"></tbody>
+                  </table>
+                  <div class="alert alert-warning mb-0">
+                    <div class="fw-semibold">timeAgoLive() — updates live</div>
+                    <div class="result fs-5" id="timeAgoLive">—</div>
+                    <small class="text-muted">Subscribed to the live handle; re-emits on an adaptive schedule.</small>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Durations -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">Durations</div>
+                <div class="card-body">
+                  <div class="input-group mb-3">
+                    <span class="input-group-text">duration</span>
+                    <input type="number" id="durAmount" class="form-control" value="90" style="max-width: 7rem" />
+                    <select id="durUnit" class="form-select">
+                      <option>second</option>
+                      <option selected>minute</option>
+                      <option>hour</option>
+                      <option>day</option>
+                      <option>week</option>
+                      <option>month</option>
+                      <option>year</option>
+                    </select>
+                  </div>
+                  <table class="table table-sm align-middle mb-0">
+                    <tbody id="durTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- Live snippet -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">The exact calls behind these values</div>
+                <div class="card-body">
+                  <pre class="code mb-0"><code id="codeSnippet"></code></pre>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="py-4 border-top">
+      <div class="container text-center text-muted">
+        <small>
+          <span class="text-brand fw-semibold">DateTick</span> (datetick) — MIT ©
+          <a href="https://github.com/andreasnicolaou" target="_blank" rel="noopener">Andreas Nicolaou</a>. This page
+          runs the library's UMD build loaded locally or from a CDN; no build step required.
+        </small>
+      </div>
+    </footer>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+    <!-- The library: try the locally-built bundle first, fall back to the published CDN build -->
+    <script>
+      (function () {
+        function loadFromCdn(onDone) {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/datetick/dist/index.umd.min.js';
+          s.onload = onDone;
+          s.onerror = function () {
+            showError('Could not load the DateTick bundle from local ../dist or the CDN.');
+          };
+          document.head.appendChild(s);
+        }
+        function showError(msg) {
+          const box = document.querySelector('#load-error .alert');
+          box.textContent = msg;
+          box.classList.remove('d-none');
+        }
+        const local = document.createElement('script');
+        local.src = '../dist/index.umd.min.js';
+        local.onload = function () {
+          if (window.datetick) start();
+          else loadFromCdn(start);
+        };
+        local.onerror = function () {
+          loadFromCdn(start);
+        };
+        document.head.appendChild(local);
+        window.__showError = showError;
+      })();
+
+      function start() {
+        // The UMD build exposes the namespace as window.datetick: { datetick, DateTick, Duration, ... }
+        const ns = window.datetick || {};
+        const DateTick = ns.DateTick || (typeof ns === 'function' ? ns : null);
+        if (!DateTick || typeof DateTick !== 'function') {
+          window.__showError('DateTick global not found in the loaded bundle.');
+          return;
+        }
+
+        const $ = (id) => document.getElementById(id);
+        const dateInput = $('dateInput');
+        const compareInput = $('compareInput');
+        const localeInput = $('localeInput');
+        const tzInput = $('tzInput');
+        const weekStartInput = $('weekStartInput');
+
+        const pad = (n) => String(n).padStart(2, '0');
+
+        const toCanonicalValue = (dt) =>
+          `${dt.year()}-${pad(dt.month() + 1)}-${pad(dt.date())} ${pad(dt.hour())}:${pad(dt.minute())}`;
+
+        const toDisplayValue = (dt) =>
+          dt.format({ year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+        const setInputDate = (input, dt, emit = false) => {
+          input.dataset.value = toCanonicalValue(dt);
+          input.value = toDisplayValue(dt);
+          if (emit) input.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        const parseInputValue = (value) => {
+          const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(value || '');
+          if (!match) return null;
+          return {
+            year: Number(match[1]),
+            month: Number(match[2]) - 1,
+            day: Number(match[3]),
+            hour: Number(match[4]),
+            minute: Number(match[5]),
+          };
+        };
+
+        const parseInput = (input) => parseInputValue(input.dataset.value) || parseInputValue(input.value);
+
+        const toDateTick = (parts) =>
+          new DateTick(localeInput.value, tzInput.value, new Date(), Number(weekStartInput.value))
+            .year(parts.year)
+            .month(parts.month)
+            .date(parts.day)
+            .hour(parts.hour)
+            .minute(parts.minute)
+            .second(0)
+            .millisecond(0);
+
+        const syncInputDisplay = (input) => {
+          const parts = parseInput(input);
+          if (parts) setInputDate(input, toDateTick(parts));
+        };
+
+        // Interpret the stored local date-time as a wall clock *in the currently selected timezone*.
+        // This is the key to making the page intuitive: typing 22:23 with UTC selected means 22:23 UTC.
+        const toolkitFromInput = (input) =>
+          toDateTick(parseInput(input) || parseInputValue(toCanonicalValue(new DateTick())));
+
+        function createDateTimePicker(input) {
+          const picker = document.createElement('div');
+          picker.className = 'datetick-picker';
+          picker.hidden = true;
+          picker.innerHTML = `
+            <div class="datetick-picker-head">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-action="prev" aria-label="Previous month">&lsaquo;</button>
+              <div class="datetick-picker-title"></div>
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-action="next" aria-label="Next month">&rsaquo;</button>
+            </div>
+            <div class="datetick-picker-grid"></div>
+            <div class="datetick-picker-time">
+              <input class="form-control form-control-sm" type="number" min="0" max="23" aria-label="Hour" />
+              <span>:</span>
+              <input class="form-control form-control-sm" type="number" min="0" max="59" aria-label="Minute" />
+            </div>
+          `;
+          document.body.appendChild(picker);
+
+          const title = picker.querySelector('.datetick-picker-title');
+          const grid = picker.querySelector('.datetick-picker-grid');
+          const hourInput = picker.querySelector('input[aria-label="Hour"]');
+          const minuteInput = picker.querySelector('input[aria-label="Minute"]');
+          let view = null;
+
+          const currentParts = () => {
+            const parsed = parseInput(input);
+            if (parsed) return parsed;
+            setInputDate(input, new DateTick(localeInput.value, tzInput.value, new Date()));
+            return parseInput(input);
+          };
+
+          const setParts = (parts) => {
+            setInputDate(input, toDateTick(parts), true);
+          };
+
+          const position = () => {
+            const rect = input.getBoundingClientRect();
+            picker.style.top = `${rect.bottom + window.scrollY + 4}px`;
+            picker.style.left = `${Math.min(rect.left + window.scrollX, window.scrollX + window.innerWidth - picker.offsetWidth - 16)}px`;
+          };
+
+          const renderPicker = () => {
+            const parts = currentParts();
+            if (!view) view = { year: parts.year, month: parts.month };
+            const viewDate = new DateTick(localeInput.value, tzInput.value, new Date(), Number(weekStartInput.value))
+              .year(view.year)
+              .month(view.month)
+              .date(1)
+              .hour(parts.hour)
+              .minute(parts.minute)
+              .second(0)
+              .millisecond(0);
+            const selectedDate = new DateTick(
+              localeInput.value,
+              tzInput.value,
+              new Date(),
+              Number(weekStartInput.value)
+            )
+              .year(parts.year)
+              .month(parts.month)
+              .date(parts.day)
+              .hour(parts.hour)
+              .minute(parts.minute)
+              .second(0)
+              .millisecond(0);
+            const calendar = viewDate.calendarMonth({ selected: selectedDate, dateFormat: 'D' });
+
+            title.textContent = calendar.label;
+            grid.innerHTML = '';
+
+            calendar.weekdays.forEach((weekday) => {
+              const label = document.createElement('div');
+              label.className = 'datetick-picker-weekday';
+              label.textContent = weekday.short;
+              grid.appendChild(label);
+            });
+
+            calendar.days.forEach((day) => {
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'datetick-picker-day';
+              button.textContent = day.formatted;
+              if (!day.isCurrentMonth) button.classList.add('is-muted');
+              if (day.isSelected) {
+                button.classList.add('is-selected');
+              }
+              button.addEventListener('click', () => {
+                setParts({ ...parts, year: day.year, month: day.month, day: day.date });
+                picker.hidden = true;
+              });
+              grid.appendChild(button);
+            });
+
+            hourInput.value = pad(parts.hour);
+            minuteInput.value = pad(parts.minute);
+            position();
+          };
+
+          picker.addEventListener('click', (event) => {
+            const action = event.target.getAttribute('data-action');
+            if (!action) return;
+            const parts = currentParts();
+            if (!view) view = { year: parts.year, month: parts.month };
+            const delta = action === 'prev' ? -1 : 1;
+            const next = new Date(Date.UTC(view.year, view.month + delta, 1));
+            view = { year: next.getUTCFullYear(), month: next.getUTCMonth() };
+            renderPicker();
+          });
+
+          [hourInput, minuteInput].forEach((timeInput) => {
+            timeInput.addEventListener('input', () => {
+              const parts = currentParts();
+              const hour = Math.min(23, Math.max(0, Number(hourInput.value || 0)));
+              const minute = Math.min(59, Math.max(0, Number(minuteInput.value || 0)));
+              setParts({ ...parts, hour, minute });
+              renderPicker();
+            });
+          });
+
+          const open = () => {
+            document.querySelectorAll('.datetick-picker').forEach((el) => {
+              if (el !== picker) el.hidden = true;
+            });
+            const parts = currentParts();
+            view = { year: parts.year, month: parts.month };
+            picker.hidden = false;
+            renderPicker();
+          };
+
+          input.addEventListener('focus', open);
+          input.addEventListener('click', open);
+          input.addEventListener('input', () => {
+            const parts = parseInputValue(input.value);
+            if (parts) input.dataset.value = input.value;
+            if (parts) view = { year: parts.year, month: parts.month };
+            if (!picker.hidden) renderPicker();
+          });
+          weekStartInput.addEventListener('input', () => {
+            if (!picker.hidden) renderPicker();
+          });
+          weekStartInput.addEventListener('change', () => {
+            if (!picker.hidden) renderPicker();
+          });
+          window.addEventListener('resize', () => {
+            if (!picker.hidden) position();
+          });
+          document.addEventListener('click', (event) => {
+            if (event.target === input || picker.contains(event.target)) return;
+            picker.hidden = true;
+          });
+        }
+
+        // Initialise inputs to "now" and "now + 2 days", expressed in the selected timezone
+        const nowZoned = new DateTick(localeInput.value, tzInput.value, new Date());
+        setInputDate(dateInput, nowZoned);
+        setInputDate(compareInput, nowZoned.add(2, 'day'));
+
+        let stopLiveTimeAgo = null;
+
+        const row = (label, value) =>
+          `<tr><th scope="row" class="text-nowrap text-muted fw-normal">${label}</th><td class="result text-end">${value}</td></tr>`;
+
+        function currentToolkit() {
+          return toolkitFromInput(dateInput);
+        }
+
+        function render() {
+          syncInputDisplay(dateInput);
+          syncInputDisplay(compareInput);
+          const dt = currentToolkit();
+
+          // Formatting presets
+          const presets = [
+            'short',
+            'medium',
+            'long',
+            'full',
+            'dateOnly',
+            'timeOnly',
+            'weekdayTime',
+            'isoStyle12h',
+            'isoStyle24h',
+          ];
+          $('formatTable').innerHTML = presets.map((p) => row(`format('${p}')`, escapeHtml(dt.format(p)))).join('');
+
+          // Token pattern (formatPattern)
+          try {
+            $('patternOut').textContent = dt.formatPattern($('patternInput').value);
+          } catch (e) {
+            $('patternOut').textContent = String(e);
+          }
+
+          // Components & calendar info
+          $('partsTable').innerHTML = [
+            row('year()', dt.year()),
+            row('month() (0-11)', dt.month()),
+            row('date()', dt.date()),
+            row('day() (0=Sun)', dt.day()),
+            row('hour()', dt.hour()),
+            row('minute()', dt.minute()),
+            row('quarter()', dt.quarter()),
+            row('week()', dt.week()),
+            row('isoWeek()', dt.isoWeek()),
+            row('dayOfYear()', dt.dayOfYear()),
+            row('daysInMonth()', dt.daysInMonth()),
+            row('isLeapYear()', dt.isLeapYear()),
+            row('isToday()', dt.isToday()),
+            row('isTomorrow()', dt.isTomorrow()),
+            row('isYesterday()', dt.isYesterday()),
+            row('ordinal()', escapeHtml(dt.ordinal())),
+            row('unix()', dt.unix()),
+            row('toObject()', escapeHtml(JSON.stringify(dt.toObject()))),
+            row('toISOString()', escapeHtml(dt.toISOString())),
+          ].join('');
+
+          // Manipulation preview
+          renderManip(dt);
+
+          // Durations
+          renderDuration();
+
+          // Comparison
+          renderCompare(dt);
+
+          // Live time ago
+          if (stopLiveTimeAgo) stopLiveTimeAgo();
+          stopLiveTimeAgo = dt.timeAgoSubscribe((v) => ($('timeAgoLive').textContent = v));
+
+          // Snippet
+          $('codeSnippet').textContent =
+            `const dt = new DateTick('${localeInput.value}', '${tzInput.value}', new Date('${dt.toISOString()}'), ${weekStartInput.value});\n` +
+            `dt.formatPattern('dddd, D MMM YYYY'); // ${dt.formatPattern('dddd, D MMM YYYY')}\n` +
+            `dt.add(${$('amountInput').value || 0}, '${$('unitInput').value}').formatPattern('L LT');\n` +
+            `dt.timeAgo();                          // ${dt.timeAgo()}`;
+        }
+
+        function renderManip(dt) {
+          const amount = Number($('amountInput').value || 0);
+          const unit = $('unitInput').value;
+          const added = dt.add(amount, unit);
+          const subbed = dt.subtract(amount, unit);
+          $('manipTable').innerHTML = [
+            row('original', escapeHtml(dt.format('medium'))),
+            row(`add(${amount}, '${unit}')`, escapeHtml(added.format('medium'))),
+            row(`subtract(${amount}, '${unit}')`, escapeHtml(subbed.format('medium'))),
+            row("startOf('month')", escapeHtml(dt.startOf('month').format('medium'))),
+            row("endOf('month')", escapeHtml(dt.endOf('month').format('medium'))),
+            row("startOf('week')", escapeHtml(dt.startOf('week').format('medium'))),
+            row("endOf('week')", escapeHtml(dt.endOf('week').format('medium'))),
+          ].join('');
+        }
+
+        function renderDuration() {
+          const amount = Number($('durAmount').value || 0);
+          const unit = $('durUnit').value;
+          const dur = DateTick.duration(amount, unit, localeInput.value);
+          $('durTable').innerHTML = [
+            row(`duration(${amount}, '${unit}')`, ''),
+            row('humanize()', escapeHtml(dur.humanize())),
+            row('humanize(true)', escapeHtml(dur.humanize(true))),
+            row('asHours()', dur.asHours()),
+            row('asDays()', dur.asDays().toFixed(3)),
+            row('toISOString()', escapeHtml(dur.toISOString())),
+          ].join('');
+        }
+
+        function renderCompare(dt) {
+          if (!parseInput(compareInput)) {
+            $('compareTable').innerHTML = row('compare', 'pick a date');
+            return;
+          }
+          const other = toolkitFromInput(compareInput);
+          $('compareTable').innerHTML = [
+            row('selected.isBefore(compare)', dt.isBefore(other)),
+            row('selected.isAfter(compare)', dt.isAfter(other)),
+            row("selected.isSame(compare, 'day')", dt.isSame(other, 'day')),
+            row("selected.diff(compare, 'day')", dt.diff(other, 'day')),
+            row("selected.diffCalendar(compare, 'day')", dt.diffCalendar(other, 'day')),
+            row("selected.diff(compare, 'hour')", dt.diff(other, 'hour')),
+            row("selected.diff(compare, 'month')", dt.diff(other, 'month')),
+          ].join('');
+        }
+
+        function escapeHtml(s) {
+          return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Wire up events
+        [
+          dateInput,
+          compareInput,
+          localeInput,
+          tzInput,
+          weekStartInput,
+          $('amountInput'),
+          $('unitInput'),
+          $('patternInput'),
+          $('durAmount'),
+          $('durUnit'),
+        ].forEach((el) => {
+          el.addEventListener('input', render);
+          el.addEventListener('change', render);
+        });
+        $('addBtn').addEventListener('click', () => {
+          setInputDate(dateInput, currentToolkit().add(Number($('amountInput').value || 0), $('unitInput').value));
+          render();
+        });
+        $('subBtn').addEventListener('click', () => {
+          setInputDate(dateInput, currentToolkit().subtract(Number($('amountInput').value || 0), $('unitInput').value));
+          render();
+        });
+        $('nowBtn').addEventListener('click', () => {
+          setInputDate(dateInput, new DateTick(localeInput.value, tzInput.value, new Date()));
+          render();
+        });
+
+        createDateTimePicker(dateInput);
+        createDateTimePicker(compareInput);
+
+        render();
+      }
+    </script>
+
+    <!-- Scroll-spy: highlights the active navbar item and active docs sidebar item as the page scrolls -->
+    <script>
+      (function () {
+        function setupScrollSpy(navSelector) {
+          const links = Array.from(document.querySelectorAll(navSelector));
+          const sections = links
+            .map((link) => ({ link, el: document.querySelector(link.getAttribute('href')) }))
+            .filter((item) => item.el);
+          if (!sections.length) return;
+
+          const setActive = (id) => {
+            sections.forEach(({ link, el }) => link.classList.toggle('active', el.id === id));
+          };
+
+          const observer = new IntersectionObserver(
+            (entries) => {
+              const visible = entries
+                .filter((entry) => entry.isIntersecting)
+                .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+              if (visible.length) setActive(visible[0].target.id);
+            },
+            { rootMargin: '-80px 0px -65% 0px', threshold: 0 }
+          );
+          sections.forEach(({ el }) => observer.observe(el));
+        }
+
+        setupScrollSpy('.navbar-nav .nav-link[href^="#"]');
+        setupScrollSpy('.doc-nav .nav-link[href^="#"]');
+      })();
+    </script>
+  </body>
+</html>
