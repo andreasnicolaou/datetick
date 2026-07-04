@@ -1,18 +1,41 @@
-.idea
+# NOTE: The published contents are primarily controlled by the "files" allowlist
+# in package.json ("files": ["dist"]) — that whitelist is what actually decides
+# what ships. This .npmignore is a secondary safety net so stray files can never
+# leak even if the allowlist is ever loosened. README, LICENSE and package.json
+# are always published by npm regardless of these rules.
+
+# Source & tests (only built output in dist/ is shipped)
 /src
+
+# Documentation site
+/docs
+
+# Tooling & config
+.editorconfig
 .prettierrc
-.github
 .prettierignore
 eslint.config.mjs
-/docs
-/coverage
-*.tgz
-.husky
-
-# Build and development files
+commitlint.config.mjs
 rollup.config.js
 tsconfig.json
-temp/
+
+# CI, hooks & IDE
+.github
+.husky
+.idea
+.vscode
+
+# Repo meta files
+.gitignore
+.npmignore
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 SECURITY.md
+
+# Generated / test / build artifacts
+/coverage
+junit.xml
+temp/
+*.tsbuildinfo
+*.tgz
+*.log
