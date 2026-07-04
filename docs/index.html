@@ -210,6 +210,11 @@
       .datetick-picker-time input {
         width: 4.5rem;
       }
+      .is-unavailable {
+        filter: blur(4px);
+        pointer-events: none;
+        user-select: none;
+      }
     </style>
   </head>
   <body>
@@ -274,7 +279,7 @@
     </header>
 
     <main>
-      <div id="load-error" class="container"><div class="alert alert-danger d-none" role="alert"></div></div>
+      <div id="load-error" class="container"><div class="alert alert-danger d-none my-4" role="alert"></div></div>
 
       <!-- Features -->
       <section class="anchor py-5" id="features">
@@ -345,7 +350,7 @@
                   <div class="feature-icon mb-3">🪶</div>
                   <h5 class="fw-semibold">Tiny &amp; typed</h5>
                   <p class="text-muted mb-0">
-                    ~7 kB gzipped, zero framework deps, ships with <code>.d.ts</code> declarations.
+                    ~8 kB gzipped, zero framework deps, ships with <code>.d.ts</code> declarations.
                   </p>
                 </div>
               </div>
@@ -554,8 +559,11 @@ datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezo
                 <table class="table table-sm api">
                   <tbody>
                     <tr>
-                      <td><code>diff(date, unit?)</code></td>
-                      <td>Difference (default <code>millisecond</code>), truncated toward zero</td>
+                      <td><code>diff(date, unit?, precise?)</code></td>
+                      <td>
+                        Difference (default <code>millisecond</code>), truncated toward zero — pass
+                        <code>precise = true</code> for the fractional value
+                      </td>
                     </tr>
                     <tr>
                       <td><code>diffCalendar(date, unit?)</code></td>
@@ -574,8 +582,12 @@ datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezo
                       <td>Inclusive ordering</td>
                     </tr>
                     <tr>
-                      <td><code>isBetween(start, end, inclusive?)</code></td>
-                      <td>Range check</td>
+                      <td><code>isBetween(start, end, inclusivity?)</code></td>
+                      <td>
+                        Range check. <code>inclusivity</code> is a boolean or bracket notation <code>'()'</code> /
+                        <code>'[]'</code> / <code>'[)'</code> / <code>'(]'</code> (<code>[</code> = inclusive edge,
+                        default exclusive)
+                      </td>
                     </tr>
                     <tr>
                       <td><code>isToday()</code> / <code>isTomorrow()</code> / <code>isYesterday()</code></td>
@@ -766,11 +778,16 @@ datetick.duration(span).toISOString();          <span class="tok-c">// 'P1Y2M3DT
 
               <div class="doc-block mb-5" id="doc-convert">
                 <h3 class="mb-3">Conversion</h3>
-                <p class="text-muted mb-0">
+                <p class="text-muted mb-2">
                   <code>toDate()</code>, <code>toArray()</code>, <code>toObject()</code>, <code>toISOString()</code>,
                   <code>toJSON()</code> (so <code>JSON.stringify</code> works), <code>toString()</code>,
                   <code>unix()</code> (seconds), <code>valueOf()</code> (ms — enables <code>+instance</code> and
                   <code>&lt;</code>/<code>&gt;</code>).
+                </p>
+                <p class="text-muted mb-0">
+                  Timezone conversion keeps the same instant, changing only the zone the wall clock resolves through:
+                  <code>utc()</code> and <code>local()</code> (runtime zone) return a new <code>DateTick</code>, while
+                  <code>utcOffset()</code> returns the configured zone's offset in minutes (positive east of UTC).
                 </p>
               </div>
 
@@ -800,9 +817,12 @@ ld.ordinal(<span class="tok-s">1</span>);        <span class="tok-c">// '1st'  (
                 <h3 class="mb-3">Static helpers</h3>
                 <p class="text-muted mb-0">
                   <code>DateTick.guessTimezone()</code>, <code>DateTick.isValid(date)</code>,
-                  <code>DateTick.min(...dates)</code>, <code>DateTick.max(...dates)</code>,
-                  <code>DateTick.parse(...)</code>, <code>DateTick.duration(...)</code> — all also available on the
-                  <code>datetick</code> factory (plus <code>datetick.utc</code> and <code>datetick.unix</code>).
+                  <code>DateTick.isDateTick(value)</code>, <code>DateTick.min(...dates)</code>,
+                  <code>DateTick.max(...dates)</code>, <code>DateTick.parse(...)</code>,
+                  <code>DateTick.duration(...)</code> — all also available on the <code>datetick</code> factory (plus
+                  <code>datetick.utc</code>, <code>datetick.unix</code> and the
+                  <code>datetick.isDuration(value)</code> type guard, also exported as
+                  <code>Duration.isDuration</code>).
                 </p>
               </div>
 
@@ -1245,6 +1265,8 @@ onUnmounted(() =&gt; stop?.());
           const box = document.querySelector('#load-error .alert');
           box.textContent = msg;
           box.classList.remove('d-none');
+          const playground = document.getElementById('playground');
+          if (playground) playground.classList.add('is-unavailable');
         }
         const local = document.createElement('script');
         local.src = '../dist/index.umd.min.js';
