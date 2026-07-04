@@ -1266,7 +1266,10 @@ onUnmounted(() =&gt; stop?.());
           box.textContent = msg;
           box.classList.remove('d-none');
           const playground = document.getElementById('playground');
-          if (playground) playground.classList.add('is-unavailable');
+          if (playground) {
+            playground.classList.add('is-unavailable');
+            playground.setAttribute('inert', '');
+          }
         }
         const local = document.createElement('script');
         local.src = '../dist/index.umd.min.js';
