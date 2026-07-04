@@ -9,6 +9,9 @@
   "private": false,
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": {
