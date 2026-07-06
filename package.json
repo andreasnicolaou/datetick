@@ -64,7 +64,7 @@
     "files": [
       {
         "path": "dist/index.js",
-        "maxSize": "20kB",
+        "maxSize": "25kB",
         "compression": "gzip"
       },
       {

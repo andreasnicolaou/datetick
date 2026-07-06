@@ -3,10 +3,38 @@
 import type { ZonedParts } from './types';
 
 /**
+ * Builds a UTC timestamp (ms) from wall-clock parts. Unlike `Date.UTC`, which maps years 0-99 to
+ * 1900-1999, `setUTCFullYear` sets the literal year, so low and negative years round-trip correctly.
+ */
+export const utcFromParts = (parts: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  millisecond: number;
+}): number => {
+  const base = new Date(0);
+  base.setUTCFullYear(parts.year, parts.month, parts.day);
+  base.setUTCHours(parts.hour, parts.minute, parts.second, parts.millisecond);
+  return base.getTime();
+};
+
+/**
+ * Builds a midnight-UTC Date from year/month/day, correctly handling years 0-99 (see utcFromParts).
+ * Used for locale-free day-of-week lookups.
+ */
+export const utcDateFromYMD = (year: number, month: number, day: number): Date =>
+  new Date(utcFromParts({ year, month, day, hour: 0, minute: 0, second: 0, millisecond: 0 }));
+
+/**
  * Returns the number of days in a given month (month is 0-based).
  */
 export const getDaysInMonth = (year: number, month: number): number => {
-  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const base = new Date(0);
+  base.setUTCFullYear(year, month + 1, 0);
+  return base.getUTCDate();
 };
 
 /**
@@ -42,7 +70,7 @@ export const partsOf = (date: Date, timezone: string): ZonedParts => {
     if (part.type !== 'literal') map[part.type] = Number(part.value);
   }
   // Day-of-week is derived from the zoned Y/M/D treated as a UTC date (a stable, locale-free lookup).
-  const weekday = new Date(Date.UTC(map.year, map.month - 1, map.day)).getUTCDay();
+  const weekday = utcDateFromYMD(map.year, map.month - 1, map.day).getUTCDay();
   return {
     year: map.year,
     month: map.month - 1,
@@ -60,8 +88,7 @@ export const partsOf = (date: Date, timezone: string): ZonedParts => {
  */
 export const offsetMs = (instant: Date, timezone: string): number => {
   const p = partsOf(instant, timezone);
-  const asUtc = Date.UTC(p.year, p.month, p.day, p.hour, p.minute, p.second, p.millisecond);
-  return asUtc - instant.getTime();
+  return utcFromParts(p) - instant.getTime();
 };
 
 /**
@@ -72,20 +99,19 @@ export const instantFromParts = (
   parts: Pick<ZonedParts, 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'millisecond'>,
   timezone: string
 ): Date => {
-  const utcGuess = Date.UTC(
-    parts.year,
-    parts.month,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-    parts.millisecond
-  );
+  const utcGuess = utcFromParts(parts);
   const offset1 = offsetMs(new Date(utcGuess), timezone);
-  let instant = utcGuess - offset1;
-  const offset2 = offsetMs(new Date(instant), timezone);
-  if (offset2 !== offset1) instant = utcGuess - offset2;
-  return new Date(instant);
+  const instant1 = utcGuess - offset1;
+  const offset2 = offsetMs(new Date(instant1), timezone);
+  // No transition near this wall-clock time: the first pass is already correct.
+  if (offset2 === offset1) return new Date(instant1);
+  const instant2 = utcGuess - offset2;
+  // If the second pass round-trips, the wall-clock time is valid (normal offset correction, or the
+  // later occurrence of a fall-back overlap) — use it.
+  if (offsetMs(new Date(instant2), timezone) === offset2) return new Date(instant2);
+  // Otherwise the requested wall-clock time falls in a spring-forward gap and never occurred; roll
+  // forward to the first valid instant after the gap instead of landing before it (on the prior day).
+  return new Date(Math.max(instant1, instant2));
 };
 
 // Localized month/weekday names are stable per (locale, style); creating a fresh `Intl.DateTimeFormat`
@@ -173,7 +199,7 @@ export const ordinalSuffix = (n: number): string => {
 
 type LocalizedToken = 'LTS' | 'LT' | 'LLLL' | 'LLL' | 'LL' | 'L' | 'llll' | 'lll' | 'll' | 'l';
 
-// dayjs-style localized tokens, described as the (date-part, time-part) Intl option pair each one
+// Localized tokens, described as the (date-part, time-part) Intl option pair each one
 // derives from. Date and time are requested as separate `Intl` calls and joined with a space so that
 // modern ICU never injects an " at " connector between them.
 const TIME_LT: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
@@ -275,6 +301,7 @@ const TOKENS = [
   'MMM',
   'ddd',
   'SSS',
+  'SS',
   'LLL',
   'LTS',
   'lll',
@@ -303,6 +330,7 @@ const TOKENS = [
   'h',
   'm',
   's',
+  'S',
   'A',
   'a',
   'Z',

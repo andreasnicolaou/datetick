@@ -138,7 +138,7 @@ export interface DurationInput {
 export type OrdinalFn = (n: number) => string;
 
 /**
- * Locale metadata for a {@link DateTick}, resolved through `Intl` — the Day.js `localeData()` equivalent.
+ * Locale metadata for a {@link DateTick}, resolved through `Intl`.
  */
 export interface LocaleData {
   /** Long month names, index 0 = January. */
