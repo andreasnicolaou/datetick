@@ -221,7 +221,7 @@ export class Duration {
   }
 
   /**
-   * Formats the duration with Day.js-style duration tokens.
+   * Formats the duration with token patterns.
    *
    * Supported tokens: `Y` `YY` `YYYY` `M` `MM` `D` `DD` `H` `HH` `m` `mm` `s` `ss` `SSS`.
    * Wrap literal text in `[square brackets]`.
