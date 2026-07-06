@@ -54,6 +54,8 @@ export interface DateTickFactory {
   (date?: DateInput, options?: DateTickOptions): DateTick;
   /** Creates a {@link Duration}, using this factory's default locale unless overridden. */
   duration(value: number | string | DurationInput, unit?: DateUnit, locale?: string): Duration;
+  /** See {@link DateTick.each}. Each result inherits this factory's locale/timezone/week-start defaults. */
+  each(start: DateInput, end: DateInput, unit?: DateUnit, step?: number): DateTick[];
   /** See {@link DateTick.guessTimezone}. */
   guessTimezone: typeof DateTick.guessTimezone;
   /** Parses a string into a DateTick, using this factory's default locale/timezone unless overridden. */
@@ -98,6 +100,8 @@ const createDateTickFactory = (defaults: DateTickOptions): DateTickFactory => {
       unit?: DateUnit,
       locale: string = defaults.locale ?? 'en'
     ): Duration => DateTick.duration(value, unit, locale),
+    each: (start: DateInput, end: DateInput, unit: DateUnit = 'day', step: number = 1): DateTick[] =>
+      DateTick.each(factory(start), end, unit, step),
     guessTimezone: DateTick.guessTimezone,
     parse: (
       input: string,

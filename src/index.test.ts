@@ -93,7 +93,7 @@ describe('DateTick', () => {
       expect(dt.millisecond(123).millisecond()).toBe(123);
     });
 
-    it('exposes Day.js-style plural get/set aliases', () => {
+    it('exposes plural get/set aliases', () => {
       // Getters mirror the singular accessors.
       expect(dt.years()).toBe(dt.year());
       expect(dt.months()).toBe(dt.month());
@@ -161,6 +161,28 @@ describe('DateTick', () => {
 
     it('should throw on invalid unit for set()', () => {
       expect(() => dt.set('week', 1)).toThrow(/Invalid unit/);
+    });
+
+    it('clamps the day when setting month/quarter/year instead of overflowing (matches add())', () => {
+      const mar31 = new DateTick('en', 'UTC', '2021-03-31T00:00:00Z');
+      // Mar 31 -> February must clamp to the 28th, not roll over to Mar 3.
+      expect(mar31.set('month', 1).formatPattern('YYYY-MM-DD')).toBe('2021-02-28');
+      expect(mar31.month(1).formatPattern('YYYY-MM-DD')).toBe('2021-02-28');
+      // May 31 (2nd month of Q2) moved to Q1 becomes the 2nd month of Q1 (Feb) and clamps.
+      const may31 = new DateTick('en', 'UTC', '2021-05-31T00:00:00Z');
+      expect(may31.set('quarter', 1).formatPattern('YYYY-MM-DD')).toBe('2021-02-28');
+      // Leap-day Feb 29 into a non-leap year clamps to Feb 28.
+      const feb29 = new DateTick('en', 'UTC', '2020-02-29T00:00:00Z');
+      expect(feb29.set('year', 2021).formatPattern('YYYY-MM-DD')).toBe('2021-02-28');
+      expect(feb29.year(2021).formatPattern('YYYY-MM-DD')).toBe('2021-02-28');
+      // Leap target keeps Feb 29.
+      expect(feb29.set('year', 2024).formatPattern('YYYY-MM-DD')).toBe('2024-02-29');
+    });
+
+    it('sets low years (0-99) literally instead of mapping them to 1900-1999', () => {
+      const d = new DateTick('en', 'UTC', '2021-06-15T00:00:00Z');
+      expect(d.year(99).formatPattern('YYYY-MM-DD')).toBe('0099-06-15');
+      expect(d.year(5).year()).toBe(5);
     });
 
     it('returns NaN for unknown get units from untyped callers', () => {
@@ -341,6 +363,34 @@ describe('DateTick', () => {
 
       const yearPrecise = new DateTick('en', 'UTC', '2021-07-01T00:00:00Z').diff('2020-01-01T00:00:00Z', 'year', true);
       expect(yearPrecise).toBeCloseTo(1.496, 2);
+
+      // Negative direction (this before other) interpolates the fractional remainder symmetrically.
+      const negative = new DateTick('en', 'UTC', '2021-01-01T00:00:00Z').diff('2021-04-15T00:00:00Z', 'month', true);
+      expect(negative).toBeLessThan(-3);
+      expect(negative).toBeGreaterThan(-4);
+      expect(Math.trunc(negative)).toBe(-3);
+    });
+
+    it('drops the final incomplete month/year when the end has not reached the start day-of-month', () => {
+      const feb14 = new DateTick('en', 'UTC', '2021-02-14T00:00:00Z');
+      const feb15 = new DateTick('en', 'UTC', '2021-02-15T00:00:00Z');
+      // Jan 15 -> Feb 14 is 30 days, not a whole month; Feb 15 is exactly one month.
+      expect(feb14.diff('2021-01-15T00:00:00Z', 'month')).toBe(0);
+      expect(feb15.diff('2021-01-15T00:00:00Z', 'month')).toBe(1);
+
+      // Classic age calculation: the day before the anniversary is still 0 whole years.
+      const dayBeforeBirthday = new DateTick('en', 'UTC', '2021-06-14T00:00:00Z');
+      const onBirthday = new DateTick('en', 'UTC', '2021-06-15T00:00:00Z');
+      expect(dayBeforeBirthday.diff('2020-06-15T00:00:00Z', 'year')).toBe(0);
+      expect(onBirthday.diff('2020-06-15T00:00:00Z', 'year')).toBe(1);
+
+      // Time-of-day within the anchor day also counts toward completeness.
+      // Feb 28 06:00 has not reached the 12:00 anchor time; Feb 28 12:00 has.
+      expect(new DateTick('en', 'UTC', '2021-02-28T06:00:00Z').diff('2021-01-31T12:00:00Z', 'month')).toBe(0);
+      expect(new DateTick('en', 'UTC', '2021-02-28T12:00:00Z').diff('2021-01-31T12:00:00Z', 'month')).toBe(1);
+
+      // Negative direction is symmetric.
+      expect(new DateTick('en', 'UTC', '2020-06-15T00:00:00Z').diff('2021-01-01T00:00:00Z', 'month')).toBe(-6);
     });
   });
 
@@ -351,6 +401,20 @@ describe('DateTick', () => {
       expect(base.isAfter('2020-01-01T00:00:00Z')).toBe(true);
       expect(base.isBefore('2021-01-01T00:00:00Z')).toBe(true);
       expect(base.isAfter('2021-01-01T00:00:00Z')).toBe(false);
+    });
+
+    it('isAfter / isBefore with a unit compares at that granularity', () => {
+      // Later in the same day is neither strictly after nor before at day granularity.
+      expect(base.isAfter('2020-06-15T23:00:00Z', 'day')).toBe(false);
+      expect(base.isBefore('2020-06-15T23:00:00Z', 'day')).toBe(false);
+      // A different day/month/year resolves in the expected direction.
+      expect(base.isAfter('2020-06-14T23:00:00Z', 'day')).toBe(true);
+      expect(base.isBefore('2020-06-16T00:00:00Z', 'day')).toBe(true);
+      expect(base.isAfter('2020-05-31T00:00:00Z', 'month')).toBe(true);
+      expect(base.isBefore('2021-01-01T00:00:00Z', 'year')).toBe(true);
+      // isSameOrAfter / isSameOrBefore honor the unit on both sides of the comparison.
+      expect(base.isSameOrAfter('2020-06-15T23:00:00Z', 'day')).toBe(true);
+      expect(base.isSameOrBefore('2020-06-15T00:00:00Z', 'day')).toBe(true);
     });
 
     it('isSame exact', () => {
@@ -573,6 +637,17 @@ describe('DateTick', () => {
       expect(d.formatPattern('d')).toBe('4'); // Thursday
     });
 
+    it('formats fractional-second tokens S and SS by truncating the 3-digit millisecond value', () => {
+      const d = new DateTick('en', 'UTC', '2018-08-16T20:02:18.123Z');
+      expect(d.formatPattern('ss.SS')).toBe('18.12');
+      expect(d.formatPattern('ss.S')).toBe('18.1');
+      // Leading zeros are preserved (90ms -> '.09' / '.0').
+      const e = new DateTick('en', 'UTC', '2018-08-16T20:02:18.090Z');
+      expect(e.formatPattern('ss.SSS')).toBe('18.090');
+      expect(e.formatPattern('ss.SS')).toBe('18.09');
+      expect(e.formatPattern('ss.S')).toBe('18.0');
+    });
+
     it('supports [escaped] literals', () => {
       const d = new DateTick('en', 'UTC', '2019-01-25T00:00:00Z');
       expect(d.formatPattern('[YYYYescape] YYYY-MM-DD')).toBe('YYYYescape 2019-01-25');
@@ -627,6 +702,47 @@ describe('DateTick', () => {
     it('parses 2-digit years and milliseconds', () => {
       const d = DateTick.parse('19-01-25 12:30:45.678', 'YY-MM-DD HH:mm:ss.SSS', 'en', 'UTC');
       expect(d.toISOString()).toBe('2019-01-25T12:30:45.678Z');
+    });
+
+    it('parses fractional-second tokens S and SS as scaled milliseconds', () => {
+      // `.9` is nine tenths of a second (900ms), `.09` is 90ms — right-padded to 3 digits.
+      expect(DateTick.parse('12:30:45.9', 'HH:mm:ss.S', 'en', 'UTC').millisecond()).toBe(900);
+      expect(DateTick.parse('12:30:45.09', 'HH:mm:ss.SS', 'en', 'UTC').millisecond()).toBe(90);
+      expect(DateTick.parse('12:30:45.99', 'HH:mm:ss.SS', 'en', 'UTC').millisecond()).toBe(990);
+      expect(DateTick.parse('04:59:00.900 PM', 'hh:mm:ss.SSS A', 'en', 'UTC').millisecond()).toBe(900);
+    });
+
+    it('parses timezone offset tokens Z and ZZ, overriding the timezone argument', () => {
+      // The wall-clock value is at +05:30, so the absolute instant is 06:30 UTC regardless of the
+      // timezone argument passed for display.
+      expect(DateTick.parse('2021-01-01 12:00 +05:30', 'YYYY-MM-DD HH:mm Z', 'en', 'UTC').toISOString()).toBe(
+        '2021-01-01T06:30:00.000Z'
+      );
+      expect(DateTick.parse('2021-01-01 12:00 +0530', 'YYYY-MM-DD HH:mm ZZ', 'en', 'UTC').toISOString()).toBe(
+        '2021-01-01T06:30:00.000Z'
+      );
+      // Negative offset and a literal `Z` for UTC.
+      expect(DateTick.parse('2021-01-01 12:00 -08:00', 'YYYY-MM-DD HH:mm Z', 'en', 'UTC').toISOString()).toBe(
+        '2021-01-01T20:00:00.000Z'
+      );
+      expect(DateTick.parse('2021-01-01 12:00 Z', 'YYYY-MM-DD HH:mm Z', 'en', 'UTC').toISOString()).toBe(
+        '2021-01-01T12:00:00.000Z'
+      );
+    });
+
+    it('parses low years (0-99) as literal years instead of mapping them to 1900-1999', () => {
+      expect(DateTick.parse('0099-01-01', 'YYYY-MM-DD', 'en', 'UTC').year()).toBe(99);
+      expect(DateTick.parse('0045-06-15', 'YYYY-MM-DD', 'en', 'UTC').formatPattern('YYYY-MM-DD')).toBe('0045-06-15');
+    });
+
+    it('computes weekday and ISO week correctly for low years (no Date.UTC 1900-mapping)', () => {
+      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const d = DateTick.parse('0099-01-01', 'YYYY-MM-DD', 'en', 'UTC');
+      // day() (numeric) must agree with the Intl-rendered short weekday, not the weekday of 1999.
+      expect(weekdays[d.day()]).toBe(d.formatPattern('ddd'));
+      // ISO week must be a sane 1-53 value, not a huge number from a mis-based year start.
+      expect(d.isoWeek()).toBeGreaterThanOrEqual(1);
+      expect(d.isoWeek()).toBeLessThanOrEqual(53);
     });
 
     it('throws on input that does not match the pattern', () => {
@@ -864,7 +980,7 @@ describe('DateTick', () => {
     });
   });
 
-  describe('Day.js-style compatibility helpers', () => {
+  describe('compatibility helpers', () => {
     it('formats calendar-style relative labels', () => {
       const reference = new DateTick('en', 'UTC', '2026-06-25T12:00:00Z');
       expect(reference.calendar('2026-06-25T00:00:00Z')).toBe('Today at 12:00 PM');
@@ -1010,7 +1126,7 @@ describe('DateTick', () => {
       expect(c.years()).toBe(0);
     });
 
-    it('supports Day.js-style duration get() and format()', () => {
+    it('supports duration get() and format()', () => {
       const dur = new Duration({ years: 1, months: 5, days: 8, hours: 4, minutes: 5, seconds: 6, milliseconds: 7 });
       expect(dur.get('year')).toBe(1);
       expect(dur.get('quarter')).toBe(1);
@@ -1193,6 +1309,36 @@ describe('DateTick', () => {
         .millisecond(0);
       expect(justAfterFallBack.toISOString()).toBe('2026-11-01T08:00:00.000Z');
       expect(justAfterFallBack.hour()).toBe(3);
+    });
+
+    it('rolls forward (not backward) when the requested wall-clock time is in a spring-forward gap', () => {
+      // America/Sao_Paulo sprang forward at local midnight on 2018-11-04 (00:00 -> 01:00), so
+      // 2018-11-04 00:00 never existed. startOf('day') must land on the first valid instant of that
+      // day (01:00 -02:00 = 03:00Z), NOT roll backward onto 2018-11-03.
+      const start = new DateTick('en', 'America/Sao_Paulo', '2018-11-04T15:00:00Z').startOf('day');
+      expect(start.toISOString()).toBe('2018-11-04T03:00:00.000Z');
+      expect(start.date()).toBe(4); // stays on the requested calendar day
+      expect(start.hour()).toBe(1); // first wall-clock hour that actually exists
+    });
+
+    it('rolls a day-add forward through a spring-forward gap (Southern hemisphere)', () => {
+      // Australia/Sydney sprang forward 2021-10-03 (02:00 -> 03:00), so 02:30 never existed that day.
+      const jumped = new DateTick('en', 'Australia/Sydney', '2021-10-02T02:30:00+10:00').add(1, 'day');
+      expect(jumped.formatPattern('YYYY-MM-DD HH:mm Z')).toBe('2021-10-03 03:30 +11:00');
+    });
+
+    it('calendar add across DST preserves wall clock while diff/diffCalendar split elapsed vs calendar', () => {
+      // NY 2021 spring-forward day (2021-03-14) is only 23 hours long.
+      const before = new DateTick('en', 'America/New_York', '2021-03-13T12:00:00-05:00');
+      const after = before.add(1, 'day');
+      expect(after.formatPattern('YYYY-MM-DD HH:mm')).toBe('2021-03-14 12:00'); // wall clock kept
+      expect(after.diff(before, 'hour')).toBe(23); // but only 23 hours elapsed
+
+      // Spanning the transition: 47 hours elapsed => 1 whole elapsed day, yet 2 calendar days apart.
+      const d13 = new DateTick('en', 'America/New_York', '2021-03-13T00:00:00-05:00');
+      const d15 = new DateTick('en', 'America/New_York', '2021-03-15T00:00:00-04:00');
+      expect(d15.diff(d13, 'day')).toBe(1);
+      expect(d15.diffCalendar(d13, 'day')).toBe(2);
     });
 
     it('startOf("day") snaps to local midnight in the zone', () => {
@@ -1534,6 +1680,107 @@ describe('DateTick', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe('each (interval iteration)', () => {
+    const iso = (list: DateTick[]): string[] => list.map((d) => d.formatPattern('YYYY-MM-DD'));
+
+    it('should return one DateTick per day across an inclusive range', () => {
+      const days = DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-30');
+      expect(days).toHaveLength(30);
+      expect(days[0].formatPattern('YYYY-MM-DD')).toBe('2026-06-01');
+      expect(days[29].formatPattern('YYYY-MM-DD')).toBe('2026-06-30');
+    });
+
+    it('should step by other units', () => {
+      const months = DateTick.each(new DateTick('en', 'UTC', '2026-01-01'), '2026-12-31', 'month');
+      expect(months).toHaveLength(12);
+      expect(iso(months)[0]).toBe('2026-01-01');
+      expect(iso(months)[11]).toBe('2026-12-01');
+
+      const weeks = DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-29', 'week');
+      expect(iso(weeks)).toEqual(['2026-06-01', '2026-06-08', '2026-06-15', '2026-06-22', '2026-06-29']);
+    });
+
+    it('should walk backwards with a negative step', () => {
+      const days = DateTick.each(new DateTick('en', 'UTC', '2026-06-03'), '2026-06-01', 'day', -1);
+      expect(iso(days)).toEqual(['2026-06-03', '2026-06-02', '2026-06-01']);
+    });
+
+    it('should return an empty array when start is after end with a positive step', () => {
+      expect(DateTick.each(new DateTick('en', 'UTC', '2026-06-03'), '2026-06-01')).toEqual([]);
+    });
+
+    it('should throw when the step is zero', () => {
+      expect(() => DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-30', 'day', 0)).toThrow(
+        'step must not be zero'
+      );
+    });
+
+    it('should preserve the wall-clock time across a DST transition', () => {
+      // US spring-forward is 2026-03-08; each daily step must stay at local midnight.
+      // Build from zoned parts (month is 0-based) so the start is genuinely 00:00 in New York.
+      const start = new DateTick('en', 'America/New_York', { year: 2026, month: 2, date: 7 });
+      const days = DateTick.each(
+        start,
+        new DateTick('en', 'America/New_York', { year: 2026, month: 2, date: 9 }),
+        'day'
+      );
+      expect(days).toHaveLength(3);
+      expect(days.every((d) => d.hour() === 0)).toBe(true);
+      expect(iso(days)).toEqual(['2026-03-07', '2026-03-08', '2026-03-09']);
+    });
+
+    it('should inherit locale/timezone defaults when called through the factory', () => {
+      const tokyo = datetick.withDefaults({ timezone: 'Asia/Tokyo' });
+      const days = tokyo.each('2026-06-01', '2026-06-02');
+      expect(days).toHaveLength(2);
+      expect(days[0].timezone()).toBe('Asia/Tokyo');
+    });
+  });
+
+  describe('business days', () => {
+    // 2026-06-05 is a Friday; 06-06 Sat, 06-07 Sun, 06-08 Mon.
+    it('should report weekends via isWeekend', () => {
+      expect(new DateTick('en', 'UTC', '2026-06-05').isWeekend()).toBe(false);
+      expect(new DateTick('en', 'UTC', '2026-06-06').isWeekend()).toBe(true);
+      expect(new DateTick('en', 'UTC', '2026-06-07').isWeekend()).toBe(true);
+      expect(new DateTick('en', 'UTC', '2026-06-08').isWeekend()).toBe(false);
+    });
+
+    it('should treat Sat/Sun as the weekend regardless of weekStartsOn', () => {
+      // day() is absolute (Sunday=0), so a Monday-based week must not shift what counts as a weekend.
+      const sat = new DateTick('en', 'UTC', '2026-06-06', 1); // weekStartsOn = Monday
+      const mon = new DateTick('en', 'UTC', '2026-06-08', 1);
+      expect(sat.weekday()).toBe(5); // relative index shifts...
+      expect(sat.isWeekend()).toBe(true); // ...but the weekend classification does not
+      expect(mon.isWeekend()).toBe(false);
+    });
+
+    it('should skip weekends when adding business days', () => {
+      const fri = new DateTick('en', 'UTC', '2026-06-05');
+      expect(fri.addBusinessDays(1).formatPattern('YYYY-MM-DD')).toBe('2026-06-08'); // Fri -> Mon
+      expect(fri.addBusinessDays(5).formatPattern('YYYY-MM-DD')).toBe('2026-06-12'); // Fri -> next Fri
+    });
+
+    it('should walk backwards for negative amounts and subtractBusinessDays', () => {
+      const mon = new DateTick('en', 'UTC', '2026-06-08');
+      expect(mon.addBusinessDays(-1).formatPattern('YYYY-MM-DD')).toBe('2026-06-05'); // Mon -> Fri
+      expect(mon.subtractBusinessDays(1).formatPattern('YYYY-MM-DD')).toBe('2026-06-05');
+    });
+
+    it('should preserve the wall-clock time when adding business days', () => {
+      const dt = new DateTick('en', 'UTC', '2026-06-05T09:30:00');
+      expect(dt.addBusinessDays(1).formatPattern('YYYY-MM-DD HH:mm')).toBe('2026-06-08 09:30');
+    });
+
+    it('should count business days between two dates, signed by direction', () => {
+      const fri = new DateTick('en', 'UTC', '2026-06-05');
+      expect(fri.diffBusinessDays('2026-06-08')).toBe(1); // Fri -> Mon
+      expect(fri.diffBusinessDays('2026-06-12')).toBe(5); // Fri -> next Fri
+      expect(new DateTick('en', 'UTC', '2026-06-08').diffBusinessDays('2026-06-05')).toBe(-1); // Mon -> Fri
+      expect(fri.diffBusinessDays('2026-06-05')).toBe(0);
     });
   });
 });

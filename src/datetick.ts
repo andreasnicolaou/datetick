@@ -32,6 +32,8 @@ import {
   ordinalSuffix,
   partsOf,
   splitTokens,
+  utcDateFromYMD,
+  utcFromParts,
 } from './internal';
 import { Duration } from './duration';
 
@@ -100,6 +102,40 @@ export class DateTick {
   }
 
   /**
+   * Returns a {@link DateTick} for each step between two dates (inclusive), stepping by `unit`.
+   *
+   * The start's locale, timezone and week-start are inherited by every result, and because each
+   * step goes through {@link DateTick.add}, DST transitions and month-length clamping are handled
+   * automatically. When `step` is positive the range is walked forwards (an empty array is returned
+   * if `start` is after `end`); pass a negative `step` to walk backwards.
+   *
+   * @param {DateInput} start - The first instant (its locale/timezone/week-start are inherited)
+   * @param {DateInput} end - The last instant, included when it lands exactly on a step
+   * @param {DateUnit} [unit='day'] - The step unit (e.g. 'day', 'week', 'month', 'hour')
+   * @param {number} [step=1] - How many units to advance each iteration (negative walks backwards)
+   * @returns {DateTick[]} One DateTick per step from `start` through `end`
+   * @throws {Error} If `step` is zero
+   * @example DateTick.each('2026-06-01', '2026-06-30') // 30 daily DateTicks
+   * @example DateTick.each('2026-01-01', '2026-12-31', 'month') // 12 month-starts
+   * @memberof DateTick
+   */
+  public static each(start: DateInput, end: DateInput, unit: DateUnit = 'day', step: number = 1): DateTick[] {
+    if (step === 0) throw new Error('DateTick.each: step must not be zero');
+    const first = start instanceof DateTick ? start : new DateTick(undefined, undefined, start);
+    const last = first.withDate(end);
+    const ascending = step > 0;
+    const result: DateTick[] = [];
+    for (
+      let current = first;
+      ascending ? current.isSameOrBefore(last) : current.isSameOrAfter(last);
+      current = current.add(step, unit)
+    ) {
+      result.push(current);
+    }
+    return result;
+  }
+
+  /**
    * Returns the runtime's best-guess IANA timezone.
    *
    * @returns {string} The guessed IANA timezone
@@ -159,7 +195,8 @@ export class DateTick {
   /**
    * Parses a string into a DateTick using an explicit token pattern, interpreting the wall-clock
    * values in the given timezone. Supported tokens mirror {@link DateTick.formatPattern}; anything
-   * else (and text wrapped in `[square brackets]`) is treated as a literal.
+   * else (and text wrapped in `[square brackets]`) is treated as a literal. A parsed offset token
+   * (`Z`/`ZZ`) fixes the absolute instant directly, overriding the `timezone` argument.
    *
    * @param {string} input - The string to parse (e.g. '25/06/2026 22:23')
    * @param {string} pattern - The token pattern (e.g. 'DD/MM/YYYY HH:mm')
@@ -179,6 +216,7 @@ export class DateTick {
     let pm = false;
     let hasMeridiem = false;
     let epoch: number | null = null;
+    let offsetMinutes: number | null = null;
     let regex = '^';
     const handlers: ((value: string) => void)[] = [];
     const digits = (token: string, wide: string, narrow: string): string => (token === wide ? '(\\d{2})' : narrow);
@@ -271,8 +309,12 @@ export class DateTick {
           });
           break;
         case 'SSS':
-          regex += '(\\d{3})';
-          handlers.push((v) => (acc.millisecond = Number(v)));
+        case 'SS':
+        case 'S':
+          // Fractional-second tokens: `S` = tenths, `SS` = hundredths, `SSS` = milliseconds.
+          // Right-pad to 3 digits so the value scales correctly (e.g. `.9` = 900ms, `.09` = 90ms).
+          regex += String.raw`(\d{${token.length}})`;
+          handlers.push((v) => (acc.millisecond = Number(v.padEnd(3, '0'))));
           break;
         case 'kk':
         case 'k':
@@ -307,6 +349,13 @@ export class DateTick {
           regex += '(-?\\d{1,16})';
           handlers.push((v) => (epoch = Number(v)));
           break;
+        // Timezone offset: `Z` = `+HH:mm` (or `Z` for UTC), `ZZ` = `+HHmm`. A parsed offset makes the
+        // wall-clock values absolute, overriding the `timezone` argument for the resulting instant.
+        case 'Z':
+        case 'ZZ':
+          regex += token === 'Z' ? String.raw`(Z|[+-]\d{2}:\d{2})` : String.raw`(Z|[+-]\d{4})`;
+          handlers.push((v) => (offsetMinutes = DateTick.offsetToMinutes(v)));
+          break;
         // Derived values that cannot reconstruct an instant on their own: consume but ignore.
         case 'Q':
         case 'w':
@@ -335,6 +384,11 @@ export class DateTick {
       if (!pm && acc.hour === 12) acc.hour = 0;
     }
     if (acc.day > getDaysInMonth(acc.year, acc.month)) throw unableToParse();
+    // An explicit offset fixes the absolute instant directly; otherwise the wall-clock values are
+    // interpreted in the provided timezone.
+    if (offsetMinutes !== null) {
+      return new DateTick(locale, timezone, new Date(utcFromParts(acc) - offsetMinutes * 60_000));
+    }
     return new DateTick(locale, timezone, instantFromParts(acc, timezone));
   }
 
@@ -359,6 +413,14 @@ export class DateTick {
       second: input.second ?? 0,
       millisecond: input.millisecond ?? 0,
     };
+  }
+
+  // Parses a formatted UTC offset (`+HH:mm`, `+HHmm`, or `Z`) into signed minutes.
+  private static offsetToMinutes(value: string): number {
+    if (value.toUpperCase() === 'Z') return 0;
+    const sign = value.startsWith('-') ? -1 : 1;
+    const numeric = value.replace(/\D/g, '');
+    return sign * (Number(numeric.slice(0, 2)) * 60 + Number(numeric.slice(2, 4)));
   }
 
   private static resolveInput(input: DateInput, timezone: string = DateTick.guessTimezone()): Date {
@@ -406,6 +468,28 @@ export class DateTick {
       default:
         return this.clone();
     }
+  }
+
+  /**
+   * Adds business days (Monday-Friday), skipping Saturdays and Sundays, in the configured timezone.
+   * A negative amount walks backwards. The wall-clock time is preserved across the added days.
+   *
+   * Public holidays are not considered — combine with your own calendar if you need them.
+   *
+   * @param {number} amount - Number of business days to add (negative subtracts)
+   * @returns {DateTick} A new DateTick `amount` business days away
+   * @example datetick('2026-06-05').addBusinessDays(1) // Mon 2026-06-08 (skips the weekend)
+   * @memberof DateTick
+   */
+  public addBusinessDays(amount: number): DateTick {
+    const direction = amount < 0 ? -1 : 1;
+    let remaining = Math.abs(Math.trunc(amount));
+    let current = this.clone();
+    while (remaining > 0) {
+      current = current.add(direction, 'day');
+      if (!current.isWeekend()) remaining--;
+    }
+    return current;
   }
 
   /**
@@ -545,7 +629,7 @@ export class DateTick {
     return this.rebuild({ day: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.date} (day of the month). */
+  /** Plural alias of {@link DateTick.date} (day of the month). */
   public dates(): number;
   public dates(value: number): DateTick;
   public dates(value?: number): number | DateTick {
@@ -589,7 +673,7 @@ export class DateTick {
     return this.rebuild({ month: 0, day: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.day} (day of the week). */
+  /** Plural alias of {@link DateTick.day} (day of the week). */
   public days(): number;
   public days(value: number): DateTick;
   public days(value?: number): number | DateTick {
@@ -608,13 +692,24 @@ export class DateTick {
   }
 
   /**
-   * Gets the difference between the wrapped date and another date.
+   * Gets the difference between the wrapped date and another date, as elapsed duration.
+   *
+   * For the fixed-length units (`millisecond` through `week`) this measures real elapsed time and
+   * truncates. A DST transition inside the range therefore makes a day count come up one short:
+   * two local midnights either side of a spring-forward are only 47 hours apart, and `47 / 24`
+   * truncates to 1. Snapping both ends with {@link DateTick.startOf} does not help — that is what
+   * anchors them to local midnight in the first place. To count calendar boundaries crossed —
+   * day numbers on a wall calendar, unaffected by DST — use {@link DateTick.diffCalendar}.
    *
    * @param {DateInput} date - The date to compare against
    * @param {DateUnit} [unit='millisecond'] - The unit of measurement
    * @param {boolean} [precise=false] - When true, returns a floating-point value instead of truncating.
    * For `month`/`quarter`/`year` the fractional part reflects progress through the current calendar unit.
    * @returns {number} The difference (positive when the wrapped date is later)
+   * @example
+   * // 30 Mar and 28 Mar 2026, both at local midnight in a zone that springs forward on the 29th
+   * end.diff(start, 'day'); // 1 — only 47 hours actually elapsed
+   * end.diffCalendar(start, 'day'); // 2 — two calendar days crossed
    * @memberof DateTick
    */
   public diff(date: DateInput, unit: DateUnit = 'millisecond', precise: boolean = false): number {
@@ -647,11 +742,37 @@ export class DateTick {
   }
 
   /**
+   * Counts business days (Monday-Friday) between this date and another, in the configured timezone.
+   *
+   * The count is exclusive of the start day and inclusive of the end day: business days are tallied
+   * as each calendar day is crossed. The result is positive when `date` is later than this instance
+   * and negative when it is earlier. Public holidays are not considered.
+   *
+   * @param {DateInput} date - The date to count business days to
+   * @returns {number} The signed number of business days between the two dates
+   * @example datetick('2026-06-05').diffBusinessDays('2026-06-08') // 1 (Fri -> Mon)
+   * @memberof DateTick
+   */
+  public diffBusinessDays(date: DateInput): number {
+    const target = this.withDate(this.toComparable(date)).startOf('day');
+    let current = this.startOf('day');
+    const direction = target.isBefore(current) ? -1 : 1;
+    let count = 0;
+    while (direction > 0 ? current.isBefore(target) : current.isAfter(target)) {
+      current = current.add(direction, 'day');
+      if (!current.isWeekend()) count += direction;
+    }
+    return count;
+  }
+
+  /**
    * Calendar-boundary difference in the configured timezone.
    *
    * Unlike {@link DateTick.diff}, this counts calendar units rather than elapsed duration.
    * For example, Friday 23:00 to Saturday 01:00 is one calendar day apart even though
-   * only two hours elapsed.
+   * only two hours elapsed. Because it compares calendar positions rather than dividing
+   * elapsed time, it is unaffected by DST transitions — prefer it whenever you are counting
+   * days, weeks or months rather than measuring how much time passed.
    *
    * @param {DateInput} date - The date to compare against
    * @param {CalendarDiffUnit} [unit='day'] - Calendar unit to compare
@@ -715,7 +836,7 @@ export class DateTick {
    * Formats the date using a token pattern, resolved in the configured timezone.
    *
    * Core tokens: `YYYY` `YY` `MMMM` `MMM` `MM` `M` `DD` `D` `dddd` `ddd` `dd` `d` `HH` `H` `hh` `h`
-   * `mm` `m` `ss` `s` `SSS` `A` `a` `Z` `ZZ`. Advanced: `Do` `Q` `k` `kk` `X` `x` `w` `ww` `wo` `W` `WW` `Wo`.
+   * `mm` `m` `ss` `s` `SSS` `SS` `S` `A` `a` `Z` `ZZ`. Advanced: `Do` `Q` `k` `kk` `X` `x` `w` `ww` `wo` `W` `WW` `Wo`.
    * Localized (resolved to the configured locale's field order and separators): `L` `LL` `LLL` `LLLL`
    * `l` `ll` `lll` `llll` `LT` `LTS`. Wrap literal text in `[square brackets]`.
    *
@@ -756,6 +877,8 @@ export class DateTick {
       mm: two(p.minute),
       m: String(p.minute),
       SSS: String(p.millisecond).padStart(3, '0'),
+      SS: String(p.millisecond).padStart(3, '0').slice(0, 2),
+      S: String(p.millisecond).padStart(3, '0').slice(0, 1),
       ss: two(p.second),
       s: String(p.second),
       A: dayPeriod,
@@ -781,7 +904,7 @@ export class DateTick {
   }
 
   /**
-   * Formats the date relative to another date, Day.js-style.
+   * Formats the date relative to another date.
    *
    * @param {DateInput} date - The date to compare from
    * @param {boolean} [withoutSuffix=false] - When true, omit "ago" / "in"
@@ -795,7 +918,7 @@ export class DateTick {
   }
 
   /**
-   * Formats the date relative to now, Day.js-style.
+   * Formats the date relative to now.
    *
    * @param {boolean} [withoutSuffix=false] - When true, omit "ago" / "in"
    * @returns {string} The relative-time label
@@ -871,7 +994,7 @@ export class DateTick {
     return this.rebuild({ hour: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.hour}. */
+  /** Plural alias of {@link DateTick.hour}. */
   public hours(): number;
   public hours(value: number): DateTick;
   public hours(value?: number): number | DateTick {
@@ -879,25 +1002,31 @@ export class DateTick {
   }
 
   /**
-   * Checks if the wrapped date is strictly after another date
+   * Checks if the wrapped date is strictly after another date, optionally truncated to a unit
    *
    * @param {DateInput} date - The date to compare against
+   * @param {DateUnit} [unit] - When provided, compares after snapping both dates to the start of this unit
    * @returns {boolean} True if the wrapped date is later
    * @memberof DateTick
    */
-  public isAfter(date: DateInput): boolean {
-    return this._date.getTime() > this.toComparable(date).getTime();
+  public isAfter(date: DateInput, unit?: DateUnit): boolean {
+    const other = this.toComparable(date);
+    if (!unit) return this._date.getTime() > other.getTime();
+    return this.startOf(unit).valueOf() > this.withDate(other).startOf(unit).valueOf();
   }
 
   /**
-   * Checks if the wrapped date is strictly before another date
+   * Checks if the wrapped date is strictly before another date, optionally truncated to a unit
    *
    * @param {DateInput} date - The date to compare against
+   * @param {DateUnit} [unit] - When provided, compares after snapping both dates to the start of this unit
    * @returns {boolean} True if the wrapped date is earlier
    * @memberof DateTick
    */
-  public isBefore(date: DateInput): boolean {
-    return this._date.getTime() < this.toComparable(date).getTime();
+  public isBefore(date: DateInput, unit?: DateUnit): boolean {
+    const other = this.toComparable(date);
+    if (!unit) return this._date.getTime() < other.getTime();
+    return this.startOf(unit).valueOf() < this.withDate(other).startOf(unit).valueOf();
   }
 
   /**
@@ -954,7 +1083,7 @@ export class DateTick {
    * @memberof DateTick
    */
   public isSameOrAfter(date: DateInput, unit?: DateUnit): boolean {
-    return this.isSame(date, unit) || this.isAfter(date);
+    return this.isSame(date, unit) || this.isAfter(date, unit);
   }
 
   /**
@@ -966,7 +1095,7 @@ export class DateTick {
    * @memberof DateTick
    */
   public isSameOrBefore(date: DateInput, unit?: DateUnit): boolean {
-    return this.isSame(date, unit) || this.isBefore(date);
+    return this.isSame(date, unit) || this.isBefore(date, unit);
   }
 
   /**
@@ -1000,6 +1129,17 @@ export class DateTick {
   }
 
   /**
+   * Checks whether the wrapped date falls on a weekend (Saturday or Sunday) in the configured timezone.
+   *
+   * @returns {boolean} True on Saturdays and Sundays
+   * @memberof DateTick
+   */
+  public isWeekend(): boolean {
+    const weekday = this.day();
+    return weekday === 0 || weekday === 6;
+  }
+
+  /**
    * Checks if the wrapped date is yesterday in the configured timezone.
    *
    * @returns {boolean} True if the date is yesterday
@@ -1028,7 +1168,7 @@ export class DateTick {
    */
   public isoWeek(): number {
     const target = this.isoThursday();
-    const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+    const yearStart = utcDateFromYMD(target.getUTCFullYear(), 0, 1);
     return Math.ceil(((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
   }
 
@@ -1074,7 +1214,7 @@ export class DateTick {
 
   /**
    * Returns locale metadata (month/weekday names, first day of week, meridiems, ordinal), resolved
-   * through `Intl` — the Day.js `localeData()` equivalent.
+   * through `Intl`.
    *
    * @returns {LocaleData} The locale metadata
    * @example datetick('2026-06-25', { locale: 'fr' }).localeData().months()[0] // 'janvier'
@@ -1113,7 +1253,7 @@ export class DateTick {
     return this.rebuild({ millisecond: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.millisecond}. */
+  /** Plural alias of {@link DateTick.millisecond}. */
   public milliseconds(): number;
   public milliseconds(value: number): DateTick;
   public milliseconds(value?: number): number | DateTick {
@@ -1134,7 +1274,7 @@ export class DateTick {
     return this.rebuild({ minute: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.minute}. */
+  /** Plural alias of {@link DateTick.minute}. */
   public minutes(): number;
   public minutes(value: number): DateTick;
   public minutes(value?: number): number | DateTick {
@@ -1144,6 +1284,9 @@ export class DateTick {
   /**
    * Gets or sets the month (0-11, in the configured timezone)
    *
+   * When setting, the day is clamped to the last valid day of the target month instead of
+   * overflowing (Mar 31 -> month Feb -> Feb 28/29), matching {@link DateTick.add}.
+   *
    * @param {number} [value] - The month to set
    * @returns {number | DateTick} The month, or a new DateTick when setting
    * @memberof DateTick
@@ -1152,10 +1295,18 @@ export class DateTick {
   public month(value: number): DateTick;
   public month(value?: number): number | DateTick {
     if (value == null) return this.parts().month;
-    return this.rebuild({ month: value });
+    const p = this.parts();
+    // Normalize any month overflow into year/month (matching add()'s calendar math), then clamp the
+    // day to the last valid day of the target month instead of overflowing (Mar 31 -> month Feb ->
+    // Feb 28/29), keeping the setter consistent with add().
+    const totalMonths = p.year * 12 + value;
+    const targetYear = Math.floor(totalMonths / 12);
+    const targetMonth = ((totalMonths % 12) + 12) % 12;
+    const targetDay = Math.min(p.day, getDaysInMonth(targetYear, targetMonth));
+    return this.rebuild({ year: targetYear, month: targetMonth, day: targetDay });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.month}. */
+  /** Plural alias of {@link DateTick.month}. */
   public months(): number;
   public months(value: number): DateTick;
   public months(value?: number): number | DateTick {
@@ -1204,7 +1355,7 @@ export class DateTick {
     return this.rebuild({ second: value });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.second}. */
+  /** Plural alias of {@link DateTick.second}. */
   public seconds(): number;
   public seconds(value: number): DateTick;
   public seconds(value?: number): number | DateTick {
@@ -1298,6 +1449,17 @@ export class DateTick {
   }
 
   /**
+   * Subtracts business days (Monday-Friday), skipping weekends (see {@link DateTick.addBusinessDays}).
+   *
+   * @param {number} amount - Number of business days to subtract (negative adds)
+   * @returns {DateTick} A new DateTick `amount` business days earlier
+   * @memberof DateTick
+   */
+  public subtractBusinessDays(amount: number): DateTick {
+    return this.addBusinessDays(-amount);
+  }
+
+  /**
    * Returns a human-readable relative time string (e.g. '3 minutes ago')
    *
    * @param {Intl.RelativeTimeFormatOptions} [options] - Intl options
@@ -1373,7 +1535,7 @@ export class DateTick {
   }
 
   /**
-   * Formats another date relative to this one, Day.js-style.
+   * Formats another date relative to this one.
    *
    * @param {DateInput} date - The target date to compare to
    * @param {boolean} [withoutSuffix=false] - When true, omit "ago" / "in"
@@ -1426,7 +1588,7 @@ export class DateTick {
   }
 
   /**
-   * Formats now relative to this date, Day.js-style.
+   * Formats now relative to this date.
    *
    * @param {boolean} [withoutSuffix=false] - When true, omit "ago" / "in"
    * @returns {string} The relative-time label
@@ -1514,7 +1676,7 @@ export class DateTick {
    */
   public week(): number {
     const p = this.parts();
-    const jan1Weekday = new Date(Date.UTC(p.year, 0, 1)).getUTCDay();
+    const jan1Weekday = utcDateFromYMD(p.year, 0, 1).getUTCDay();
     const offset = (jan1Weekday - this._weekStartsOn + 7) % 7;
     return Math.ceil((this.dayOfYear() + offset) / 7);
   }
@@ -1558,7 +1720,7 @@ export class DateTick {
     return this.rebuild({ day: p.day - relative + value });
   }
 
-  /** Day.js-style plural getter alias of {@link DateTick.week} (weeks have no setter). */
+  /** Plural getter alias of {@link DateTick.week} (weeks have no setter). */
   public weeks(): number {
     return this.week();
   }
@@ -1621,6 +1783,9 @@ export class DateTick {
   /**
    * Gets or sets the year (in the configured timezone)
    *
+   * When setting, the day is clamped to the last valid day of the target month instead of
+   * overflowing (Feb 29 -> non-leap year -> Feb 28), matching {@link DateTick.add}.
+   *
    * @param {number} [value] - The year to set
    * @returns {number | DateTick} The year, or a new DateTick when setting
    * @memberof DateTick
@@ -1629,10 +1794,14 @@ export class DateTick {
   public year(value: number): DateTick;
   public year(value?: number): number | DateTick {
     if (value == null) return this.parts().year;
-    return this.rebuild({ year: value });
+    const p = this.parts();
+    // Clamp the day to the last valid day of the target year's month so Feb 29 in a leap year
+    // resolves to Feb 28 in a non-leap year rather than overflowing to Mar 1.
+    const targetDay = Math.min(p.day, getDaysInMonth(value, p.month));
+    return this.rebuild({ year: value, day: targetDay });
   }
 
-  /** Day.js-style plural alias of {@link DateTick.year}. */
+  /** Plural alias of {@link DateTick.year}. */
   public years(): number;
   public years(value: number): DateTick;
   public years(value?: number): number | DateTick {
@@ -1653,7 +1822,7 @@ export class DateTick {
 
   private calendarDayNumber(): number {
     const p = this.parts();
-    return Math.floor(Date.UTC(p.year, p.month, p.day) / 86_400_000);
+    return Math.floor(utcDateFromYMD(p.year, p.month, p.day).getTime() / 86_400_000);
   }
 
   /**
@@ -1706,7 +1875,7 @@ export class DateTick {
    */
   private isoThursday(): Date {
     const p = this.parts();
-    const target = new Date(Date.UTC(p.year, p.month, p.day));
+    const target = utcDateFromYMD(p.year, p.month, p.day);
     target.setUTCDate(target.getUTCDate() + 4 - (target.getUTCDay() || 7));
     return target;
   }
@@ -1844,10 +2013,24 @@ export class DateTick {
 
   /**
    * Whole calendar-month difference (in units of `unitMonths` months), truncated toward zero.
+   *
+   * The year/month field difference alone over-counts by one when the end date has not yet reached
+   * the start's day-of-month and time within the final month (e.g. Jan 15 -> Feb 14 is 0 whole
+   * months, not 1; a birthday one day away is 0 whole years). So the final, incomplete month is
+   * dropped by comparing the day-and-time position within the anchor month.
    */
   private wholeMonthDiff(other: Date, unitMonths: number): number {
-    const a = this.parts();
-    const b = partsOf(other, this._timezone);
-    return Math.trunc(((a.year - b.year) * 12 + (a.month - b.month)) / unitMonths);
+    const end = this.parts();
+    const start = partsOf(other, this._timezone);
+    let months = (end.year - start.year) * 12 + (end.month - start.month);
+    // Position within a month as milliseconds-since-the-1st, so day and time compare together. The
+    // start's day is clamped to the anchor month's length (Jan 31 -> Feb has no 31st).
+    const positionInMonth = (day: number, p: ZonedParts): number =>
+      day * 86_400_000 + p.hour * 3_600_000 + p.minute * 60_000 + p.second * 1000 + p.millisecond;
+    const anchorDay = Math.min(start.day, getDaysInMonth(end.year, end.month));
+    const remainder = positionInMonth(end.day, end) - positionInMonth(anchorDay, start);
+    if (months > 0 && remainder < 0) months -= 1;
+    else if (months < 0 && remainder > 0) months += 1;
+    return Math.trunc(months / unitMonths);
   }
 }

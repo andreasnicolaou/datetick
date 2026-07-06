@@ -475,11 +475,13 @@ datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezo
                   <tbody>
                     <tr>
                       <td><code>year(value?)</code></td>
-                      <td>Full year</td>
+                      <td>Full year (setting clamps the day, e.g. Feb 29 → non-leap year → Feb 28)</td>
                     </tr>
                     <tr>
                       <td><code>month(value?)</code></td>
-                      <td>Month, <code>0</code>–<code>11</code></td>
+                      <td>
+                        Month, <code>0</code>–<code>11</code> (setting clamps the day, e.g. Mar 31 → Feb → Feb 28)
+                      </td>
                     </tr>
                     <tr>
                       <td><code>date(value?)</code></td>
@@ -565,8 +567,10 @@ datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezo
                     <tr>
                       <td><code>diff(date, unit?, precise?)</code></td>
                       <td>
-                        Difference (default <code>millisecond</code>), truncated toward zero — pass
-                        <code>precise = true</code> for the fractional value
+                        Difference (default <code>millisecond</code>), truncated toward zero — for
+                        <code>month</code>/<code>quarter</code>/<code>year</code> only whole elapsed units count (Jun 15
+                        → next Jun 14 is <code>0</code> years). Pass <code>precise = true</code> for the fractional
+                        value
                       </td>
                     </tr>
                     <tr>
@@ -574,8 +578,8 @@ datetick.guessTimezone();             <span class="tok-c">// runtime IANA timezo
                       <td>Calendar-boundary difference for <code>day</code>/<code>week</code>/<code>month</code></td>
                     </tr>
                     <tr>
-                      <td><code>isBefore(date)</code> · <code>isAfter(date)</code></td>
-                      <td>Strict ordering</td>
+                      <td><code>isBefore(date, unit?)</code> · <code>isAfter(date, unit?)</code></td>
+                      <td>Strict ordering, optionally truncated to a unit</td>
                     </tr>
                     <tr>
                       <td><code>isSame(date, unit?)</code></td>
@@ -706,8 +710,14 @@ d.formatPattern(<span class="tok-s">'YYYY-MM-DD[T]HH:mm:ssZ'</span>);</pre>
                       <td>Hour 1–24 (padded / plain)</td>
                     </tr>
                     <tr>
-                      <td><code>mm</code> · <code>m</code> · <code>ss</code> · <code>s</code> · <code>SSS</code></td>
-                      <td>Minutes / seconds / milliseconds</td>
+                      <td>
+                        <code>mm</code> · <code>m</code> · <code>ss</code> · <code>s</code> · <code>SSS</code> ·
+                        <code>SS</code> · <code>S</code>
+                      </td>
+                      <td>
+                        Minutes / seconds / fractional seconds (<code>SSS</code> = milliseconds, <code>SS</code> =
+                        hundredths, <code>S</code> = tenths)
+                      </td>
                     </tr>
                     <tr>
                       <td><code>A</code> · <code>a</code></td>
@@ -748,12 +758,22 @@ datetick(<span class="tok-s">'2026-06-25'</span>, { locale: <span class="tok-s">
                 <p class="text-muted">
                   <code class="sig">DateTick.parse(input, pattern, locale?, timezone?)</code> (also
                   <code>datetick.parse</code>) reads the wall-clock values in the given timezone and returns a
-                  <code>DateTick</code>. Throws if the input doesn’t match.
+                  <code>DateTick</code>. Throws if the input doesn’t match. Parsing mirrors the
+                  <code>formatPattern</code> token set, including fractional-second tokens
+                  (<code>S</code>/<code>SS</code>/<code>SSS</code>) and UTC-offset tokens
+                  (<code>Z</code>/<code>ZZ</code>).
                 </p>
                 <pre
                   class="code"
                 >datetick.parse(<span class="tok-s">'25/06/2026 22:23'</span>, <span class="tok-s">'DD/MM/YYYY HH:mm'</span>, <span class="tok-s">'en'</span>, <span class="tok-s">'UTC'</span>);
 datetick.parse(<span class="tok-s">'Jun 25, 2026 10:23 PM'</span>, <span class="tok-s">'MMM D, YYYY h:mm A'</span>);
+
+<span class="tok-c">// Fractional seconds are scaled by width: .9 = 900ms, .09 = 90ms</span>
+datetick.parse(<span class="tok-s">'22:23:04.9'</span>, <span class="tok-s">'HH:mm:ss.S'</span>).millisecond();  <span class="tok-c">// 900</span>
+
+<span class="tok-c">// A parsed Z/ZZ offset fixes the absolute instant, overriding the timezone argument</span>
+datetick.parse(<span class="tok-s">'2026-06-25 12:00 +05:30'</span>, <span class="tok-s">'YYYY-MM-DD HH:mm Z'</span>, <span class="tok-s">'en'</span>, <span class="tok-s">'UTC'</span>).toISOString();
+<span class="tok-c">// '2026-06-25T06:30:00.000Z'</span>
 
 <span class="tok-c">// Localized month names, meridiem and L-family layouts round-trip</span>
 datetick.parse(<span class="tok-s">'25/06/2026'</span>, <span class="tok-s">'L'</span>, <span class="tok-s">'fr'</span>, <span class="tok-s">'UTC'</span>);
@@ -1224,6 +1244,51 @@ onUnmounted(() =&gt; stop?.());
               </div>
             </section>
 
+            <!-- Business days & ranges -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">
+                  Business days &amp; ranges <span class="badge text-bg-success ms-1">new</span>
+                </div>
+                <div class="card-body">
+                  <div class="input-group mb-3">
+                    <span class="input-group-text">business days</span>
+                    <input
+                      type="number"
+                      id="bizAmount"
+                      class="form-control"
+                      value="3"
+                      aria-label="Number of business days"
+                      style="max-width: 6rem"
+                    />
+                  </div>
+                  <table class="table table-sm align-middle mb-3">
+                    <tbody id="bizTable"></tbody>
+                  </table>
+                  <label class="form-label" for="eachUnit">each() — next N steps from the selected date</label>
+                  <div class="input-group mb-3">
+                    <span class="input-group-text">next</span>
+                    <input
+                      type="number"
+                      id="eachCount"
+                      class="form-control"
+                      value="6"
+                      min="1"
+                      aria-label="Number of steps"
+                      style="max-width: 5rem"
+                    />
+                    <select id="eachUnit" class="form-select">
+                      <option selected>day</option>
+                      <option>week</option>
+                      <option>month</option>
+                      <option>hour</option>
+                    </select>
+                  </div>
+                  <div class="result small lh-lg" id="eachOut">—</div>
+                </div>
+              </div>
+            </section>
+
             <!-- Live snippet -->
             <section class="col-lg-6">
               <div class="card h-100">
@@ -1577,6 +1642,9 @@ onUnmounted(() =&gt; stop?.());
           // Comparison
           renderCompare(dt);
 
+          // Business days & ranges
+          renderBusiness(dt);
+
           // Live time ago
           if (stopLiveTimeAgo) stopLiveTimeAgo();
           stopLiveTimeAgo = dt.timeAgoSubscribe((v) => ($('timeAgoLive').textContent = v));
@@ -1636,6 +1704,30 @@ onUnmounted(() =&gt; stop?.());
           ].join('');
         }
 
+        function renderBusiness(dt) {
+          const n = Number($('bizAmount').value || 0);
+          const rows = [
+            row('isWeekend()', dt.isWeekend()),
+            row(`addBusinessDays(${n})`, escapeHtml(dt.addBusinessDays(n).format('medium'))),
+            row(`subtractBusinessDays(${n})`, escapeHtml(dt.subtractBusinessDays(n).format('medium'))),
+          ];
+          if (parseInput(compareInput)) {
+            rows.push(row('diffBusinessDays(compare)', dt.diffBusinessDays(toolkitFromInput(compareInput))));
+          }
+          $('bizTable').innerHTML = rows.join('');
+
+          // each(): the next N steps from the selected date, inclusive of the start
+          const count = Math.max(1, Math.min(60, Number($('eachCount').value || 1)));
+          const unit = $('eachUnit').value;
+          const list = DateTick.each(dt, dt.add(count - 1, unit), unit);
+          const token = { month: 'MMM YYYY', hour: 'D MMM HH:mm' }[unit] || 'ddd D MMM';
+          $('eachOut').innerHTML = list
+            .map(
+              (d) => `<span class="badge text-bg-light border me-1 mb-1">${escapeHtml(d.formatPattern(token))}</span>`
+            )
+            .join('');
+        }
+
         function escapeHtml(s) {
           return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
@@ -1652,6 +1744,9 @@ onUnmounted(() =&gt; stop?.());
           $('patternInput'),
           $('durAmount'),
           $('durUnit'),
+          $('bizAmount'),
+          $('eachCount'),
+          $('eachUnit'),
         ].forEach((el) => {
           el.addEventListener('input', render);
           el.addEventListener('change', render);
