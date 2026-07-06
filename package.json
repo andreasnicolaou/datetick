@@ -1,6 +1,6 @@
 {
   "name": "datetick",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "DateTick — a tiny, immutable, fully timezone-aware date toolkit: formatting, parsing, durations and live relative-time, for any framework.",
   "sideEffects": false,
   "main": "dist/index.js",
