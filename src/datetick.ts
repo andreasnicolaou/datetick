@@ -102,6 +102,40 @@ export class DateTick {
   }
 
   /**
+   * Returns a {@link DateTick} for each step between two dates (inclusive), stepping by `unit`.
+   *
+   * The start's locale, timezone and week-start are inherited by every result, and because each
+   * step goes through {@link DateTick.add}, DST transitions and month-length clamping are handled
+   * automatically. When `step` is positive the range is walked forwards (an empty array is returned
+   * if `start` is after `end`); pass a negative `step` to walk backwards.
+   *
+   * @param {DateInput} start - The first instant (its locale/timezone/week-start are inherited)
+   * @param {DateInput} end - The last instant, included when it lands exactly on a step
+   * @param {DateUnit} [unit='day'] - The step unit (e.g. 'day', 'week', 'month', 'hour')
+   * @param {number} [step=1] - How many units to advance each iteration (negative walks backwards)
+   * @returns {DateTick[]} One DateTick per step from `start` through `end`
+   * @throws {Error} If `step` is zero
+   * @example DateTick.each('2026-06-01', '2026-06-30') // 30 daily DateTicks
+   * @example DateTick.each('2026-01-01', '2026-12-31', 'month') // 12 month-starts
+   * @memberof DateTick
+   */
+  public static each(start: DateInput, end: DateInput, unit: DateUnit = 'day', step: number = 1): DateTick[] {
+    if (step === 0) throw new Error('DateTick.each: step must not be zero');
+    const first = start instanceof DateTick ? start : new DateTick(undefined, undefined, start);
+    const last = first.withDate(end);
+    const ascending = step > 0;
+    const result: DateTick[] = [];
+    for (
+      let current = first;
+      ascending ? current.isSameOrBefore(last) : current.isSameOrAfter(last);
+      current = current.add(step, unit)
+    ) {
+      result.push(current);
+    }
+    return result;
+  }
+
+  /**
    * Returns the runtime's best-guess IANA timezone.
    *
    * @returns {string} The guessed IANA timezone
@@ -437,6 +471,28 @@ export class DateTick {
   }
 
   /**
+   * Adds business days (Monday-Friday), skipping Saturdays and Sundays, in the configured timezone.
+   * A negative amount walks backwards. The wall-clock time is preserved across the added days.
+   *
+   * Public holidays are not considered — combine with your own calendar if you need them.
+   *
+   * @param {number} amount - Number of business days to add (negative subtracts)
+   * @returns {DateTick} A new DateTick `amount` business days away
+   * @example datetick('2026-06-05').addBusinessDays(1) // Mon 2026-06-08 (skips the weekend)
+   * @memberof DateTick
+   */
+  public addBusinessDays(amount: number): DateTick {
+    const direction = amount < 0 ? -1 : 1;
+    let remaining = Math.abs(Math.trunc(amount));
+    let current = this.clone();
+    while (remaining > 0) {
+      current = current.add(direction, 'day');
+      if (!current.isWeekend()) remaining--;
+    }
+    return current;
+  }
+
+  /**
    * Formats the date as a calendar-style relative label such as "Today at 7:23 PM".
    *
    * @param {DateInput} [reference] - The date to compare against (defaults to now)
@@ -636,13 +692,24 @@ export class DateTick {
   }
 
   /**
-   * Gets the difference between the wrapped date and another date.
+   * Gets the difference between the wrapped date and another date, as elapsed duration.
+   *
+   * For the fixed-length units (`millisecond` through `week`) this measures real elapsed time and
+   * truncates. A DST transition inside the range therefore makes a day count come up one short:
+   * two local midnights either side of a spring-forward are only 47 hours apart, and `47 / 24`
+   * truncates to 1. Snapping both ends with {@link DateTick.startOf} does not help — that is what
+   * anchors them to local midnight in the first place. To count calendar boundaries crossed —
+   * day numbers on a wall calendar, unaffected by DST — use {@link DateTick.diffCalendar}.
    *
    * @param {DateInput} date - The date to compare against
    * @param {DateUnit} [unit='millisecond'] - The unit of measurement
    * @param {boolean} [precise=false] - When true, returns a floating-point value instead of truncating.
    * For `month`/`quarter`/`year` the fractional part reflects progress through the current calendar unit.
    * @returns {number} The difference (positive when the wrapped date is later)
+   * @example
+   * // 30 Mar and 28 Mar 2026, both at local midnight in a zone that springs forward on the 29th
+   * end.diff(start, 'day'); // 1 — only 47 hours actually elapsed
+   * end.diffCalendar(start, 'day'); // 2 — two calendar days crossed
    * @memberof DateTick
    */
   public diff(date: DateInput, unit: DateUnit = 'millisecond', precise: boolean = false): number {
@@ -675,11 +742,37 @@ export class DateTick {
   }
 
   /**
+   * Counts business days (Monday-Friday) between this date and another, in the configured timezone.
+   *
+   * The count is exclusive of the start day and inclusive of the end day: business days are tallied
+   * as each calendar day is crossed. The result is positive when `date` is later than this instance
+   * and negative when it is earlier. Public holidays are not considered.
+   *
+   * @param {DateInput} date - The date to count business days to
+   * @returns {number} The signed number of business days between the two dates
+   * @example datetick('2026-06-05').diffBusinessDays('2026-06-08') // 1 (Fri -> Mon)
+   * @memberof DateTick
+   */
+  public diffBusinessDays(date: DateInput): number {
+    const target = this.withDate(this.toComparable(date)).startOf('day');
+    let current = this.startOf('day');
+    const direction = target.isBefore(current) ? -1 : 1;
+    let count = 0;
+    while (direction > 0 ? current.isBefore(target) : current.isAfter(target)) {
+      current = current.add(direction, 'day');
+      if (!current.isWeekend()) count += direction;
+    }
+    return count;
+  }
+
+  /**
    * Calendar-boundary difference in the configured timezone.
    *
    * Unlike {@link DateTick.diff}, this counts calendar units rather than elapsed duration.
    * For example, Friday 23:00 to Saturday 01:00 is one calendar day apart even though
-   * only two hours elapsed.
+   * only two hours elapsed. Because it compares calendar positions rather than dividing
+   * elapsed time, it is unaffected by DST transitions — prefer it whenever you are counting
+   * days, weeks or months rather than measuring how much time passed.
    *
    * @param {DateInput} date - The date to compare against
    * @param {CalendarDiffUnit} [unit='day'] - Calendar unit to compare
@@ -1036,6 +1129,17 @@ export class DateTick {
   }
 
   /**
+   * Checks whether the wrapped date falls on a weekend (Saturday or Sunday) in the configured timezone.
+   *
+   * @returns {boolean} True on Saturdays and Sundays
+   * @memberof DateTick
+   */
+  public isWeekend(): boolean {
+    const weekday = this.day();
+    return weekday === 0 || weekday === 6;
+  }
+
+  /**
    * Checks if the wrapped date is yesterday in the configured timezone.
    *
    * @returns {boolean} True if the date is yesterday
@@ -1342,6 +1446,17 @@ export class DateTick {
    */
   public subtract(amount: number, unit: DateUnit): DateTick {
     return this.add(-amount, unit);
+  }
+
+  /**
+   * Subtracts business days (Monday-Friday), skipping weekends (see {@link DateTick.addBusinessDays}).
+   *
+   * @param {number} amount - Number of business days to subtract (negative adds)
+   * @returns {DateTick} A new DateTick `amount` business days earlier
+   * @memberof DateTick
+   */
+  public subtractBusinessDays(amount: number): DateTick {
+    return this.addBusinessDays(-amount);
   }
 
   /**

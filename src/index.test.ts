@@ -1682,4 +1682,105 @@ describe('DateTick', () => {
       }
     });
   });
+
+  describe('each (interval iteration)', () => {
+    const iso = (list: DateTick[]): string[] => list.map((d) => d.formatPattern('YYYY-MM-DD'));
+
+    it('should return one DateTick per day across an inclusive range', () => {
+      const days = DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-30');
+      expect(days).toHaveLength(30);
+      expect(days[0].formatPattern('YYYY-MM-DD')).toBe('2026-06-01');
+      expect(days[29].formatPattern('YYYY-MM-DD')).toBe('2026-06-30');
+    });
+
+    it('should step by other units', () => {
+      const months = DateTick.each(new DateTick('en', 'UTC', '2026-01-01'), '2026-12-31', 'month');
+      expect(months).toHaveLength(12);
+      expect(iso(months)[0]).toBe('2026-01-01');
+      expect(iso(months)[11]).toBe('2026-12-01');
+
+      const weeks = DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-29', 'week');
+      expect(iso(weeks)).toEqual(['2026-06-01', '2026-06-08', '2026-06-15', '2026-06-22', '2026-06-29']);
+    });
+
+    it('should walk backwards with a negative step', () => {
+      const days = DateTick.each(new DateTick('en', 'UTC', '2026-06-03'), '2026-06-01', 'day', -1);
+      expect(iso(days)).toEqual(['2026-06-03', '2026-06-02', '2026-06-01']);
+    });
+
+    it('should return an empty array when start is after end with a positive step', () => {
+      expect(DateTick.each(new DateTick('en', 'UTC', '2026-06-03'), '2026-06-01')).toEqual([]);
+    });
+
+    it('should throw when the step is zero', () => {
+      expect(() => DateTick.each(new DateTick('en', 'UTC', '2026-06-01'), '2026-06-30', 'day', 0)).toThrow(
+        'step must not be zero'
+      );
+    });
+
+    it('should preserve the wall-clock time across a DST transition', () => {
+      // US spring-forward is 2026-03-08; each daily step must stay at local midnight.
+      // Build from zoned parts (month is 0-based) so the start is genuinely 00:00 in New York.
+      const start = new DateTick('en', 'America/New_York', { year: 2026, month: 2, date: 7 });
+      const days = DateTick.each(
+        start,
+        new DateTick('en', 'America/New_York', { year: 2026, month: 2, date: 9 }),
+        'day'
+      );
+      expect(days).toHaveLength(3);
+      expect(days.every((d) => d.hour() === 0)).toBe(true);
+      expect(iso(days)).toEqual(['2026-03-07', '2026-03-08', '2026-03-09']);
+    });
+
+    it('should inherit locale/timezone defaults when called through the factory', () => {
+      const tokyo = datetick.withDefaults({ timezone: 'Asia/Tokyo' });
+      const days = tokyo.each('2026-06-01', '2026-06-02');
+      expect(days).toHaveLength(2);
+      expect(days[0].timezone()).toBe('Asia/Tokyo');
+    });
+  });
+
+  describe('business days', () => {
+    // 2026-06-05 is a Friday; 06-06 Sat, 06-07 Sun, 06-08 Mon.
+    it('should report weekends via isWeekend', () => {
+      expect(new DateTick('en', 'UTC', '2026-06-05').isWeekend()).toBe(false);
+      expect(new DateTick('en', 'UTC', '2026-06-06').isWeekend()).toBe(true);
+      expect(new DateTick('en', 'UTC', '2026-06-07').isWeekend()).toBe(true);
+      expect(new DateTick('en', 'UTC', '2026-06-08').isWeekend()).toBe(false);
+    });
+
+    it('should treat Sat/Sun as the weekend regardless of weekStartsOn', () => {
+      // day() is absolute (Sunday=0), so a Monday-based week must not shift what counts as a weekend.
+      const sat = new DateTick('en', 'UTC', '2026-06-06', 1); // weekStartsOn = Monday
+      const mon = new DateTick('en', 'UTC', '2026-06-08', 1);
+      expect(sat.weekday()).toBe(5); // relative index shifts...
+      expect(sat.isWeekend()).toBe(true); // ...but the weekend classification does not
+      expect(mon.isWeekend()).toBe(false);
+    });
+
+    it('should skip weekends when adding business days', () => {
+      const fri = new DateTick('en', 'UTC', '2026-06-05');
+      expect(fri.addBusinessDays(1).formatPattern('YYYY-MM-DD')).toBe('2026-06-08'); // Fri -> Mon
+      expect(fri.addBusinessDays(5).formatPattern('YYYY-MM-DD')).toBe('2026-06-12'); // Fri -> next Fri
+    });
+
+    it('should walk backwards for negative amounts and subtractBusinessDays', () => {
+      const mon = new DateTick('en', 'UTC', '2026-06-08');
+      expect(mon.addBusinessDays(-1).formatPattern('YYYY-MM-DD')).toBe('2026-06-05'); // Mon -> Fri
+      expect(mon.subtractBusinessDays(1).formatPattern('YYYY-MM-DD')).toBe('2026-06-05');
+    });
+
+    it('should preserve the wall-clock time when adding business days', () => {
+      const dt = new DateTick('en', 'UTC', '2026-06-05T09:30:00');
+      expect(dt.addBusinessDays(1).formatPattern('YYYY-MM-DD HH:mm')).toBe('2026-06-08 09:30');
+    });
+
+    it('should count business days between two dates, signed by direction', () => {
+      const fri = new DateTick('en', 'UTC', '2026-06-05');
+      expect(fri.diffBusinessDays('2026-06-08')).toBe(1); // Fri -> Mon
+      expect(fri.diffBusinessDays('2026-06-12')).toBe(5); // Fri -> next Fri
+      expect(new DateTick('en', 'UTC', '2026-06-08').diffBusinessDays('2026-06-05')).toBe(-1); // Mon -> Fri
+      expect(fri.diffBusinessDays('2026-06-05')).toBe(0);
+    });
+  });
 });

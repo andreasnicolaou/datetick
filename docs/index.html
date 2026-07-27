@@ -1244,6 +1244,51 @@ onUnmounted(() =&gt; stop?.());
               </div>
             </section>
 
+            <!-- Business days & ranges -->
+            <section class="col-lg-6">
+              <div class="card h-100">
+                <div class="card-header fw-semibold bg-white">
+                  Business days &amp; ranges <span class="badge text-bg-success ms-1">new</span>
+                </div>
+                <div class="card-body">
+                  <div class="input-group mb-3">
+                    <span class="input-group-text">business days</span>
+                    <input
+                      type="number"
+                      id="bizAmount"
+                      class="form-control"
+                      value="3"
+                      aria-label="Number of business days"
+                      style="max-width: 6rem"
+                    />
+                  </div>
+                  <table class="table table-sm align-middle mb-3">
+                    <tbody id="bizTable"></tbody>
+                  </table>
+                  <label class="form-label" for="eachUnit">each() — next N steps from the selected date</label>
+                  <div class="input-group mb-3">
+                    <span class="input-group-text">next</span>
+                    <input
+                      type="number"
+                      id="eachCount"
+                      class="form-control"
+                      value="6"
+                      min="1"
+                      aria-label="Number of steps"
+                      style="max-width: 5rem"
+                    />
+                    <select id="eachUnit" class="form-select">
+                      <option selected>day</option>
+                      <option>week</option>
+                      <option>month</option>
+                      <option>hour</option>
+                    </select>
+                  </div>
+                  <div class="result small lh-lg" id="eachOut">—</div>
+                </div>
+              </div>
+            </section>
+
             <!-- Live snippet -->
             <section class="col-lg-6">
               <div class="card h-100">
@@ -1597,6 +1642,9 @@ onUnmounted(() =&gt; stop?.());
           // Comparison
           renderCompare(dt);
 
+          // Business days & ranges
+          renderBusiness(dt);
+
           // Live time ago
           if (stopLiveTimeAgo) stopLiveTimeAgo();
           stopLiveTimeAgo = dt.timeAgoSubscribe((v) => ($('timeAgoLive').textContent = v));
@@ -1656,6 +1704,30 @@ onUnmounted(() =&gt; stop?.());
           ].join('');
         }
 
+        function renderBusiness(dt) {
+          const n = Number($('bizAmount').value || 0);
+          const rows = [
+            row('isWeekend()', dt.isWeekend()),
+            row(`addBusinessDays(${n})`, escapeHtml(dt.addBusinessDays(n).format('medium'))),
+            row(`subtractBusinessDays(${n})`, escapeHtml(dt.subtractBusinessDays(n).format('medium'))),
+          ];
+          if (parseInput(compareInput)) {
+            rows.push(row('diffBusinessDays(compare)', dt.diffBusinessDays(toolkitFromInput(compareInput))));
+          }
+          $('bizTable').innerHTML = rows.join('');
+
+          // each(): the next N steps from the selected date, inclusive of the start
+          const count = Math.max(1, Math.min(60, Number($('eachCount').value || 1)));
+          const unit = $('eachUnit').value;
+          const list = DateTick.each(dt, dt.add(count - 1, unit), unit);
+          const token = { month: 'MMM YYYY', hour: 'D MMM HH:mm' }[unit] || 'ddd D MMM';
+          $('eachOut').innerHTML = list
+            .map(
+              (d) => `<span class="badge text-bg-light border me-1 mb-1">${escapeHtml(d.formatPattern(token))}</span>`
+            )
+            .join('');
+        }
+
         function escapeHtml(s) {
           return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
@@ -1672,6 +1744,9 @@ onUnmounted(() =&gt; stop?.());
           $('patternInput'),
           $('durAmount'),
           $('durUnit'),
+          $('bizAmount'),
+          $('eachCount'),
+          $('eachUnit'),
         ].forEach((el) => {
           el.addEventListener('input', render);
           el.addEventListener('change', render);
